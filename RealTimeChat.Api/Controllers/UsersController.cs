@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using RealTimeChat.Api.Data;
 using RealTimeChat.Api.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace RealTimeChat.Api.Controllers
 {
@@ -24,6 +25,12 @@ namespace RealTimeChat.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<User>> CreateUser([FromBody] CreateUserRequest request)
         {
+            var exists = await _context.Users.AnyAsync(u => u.UserName == request.UserName);
+            if (exists)
+            {
+                return Conflict("A megadott UserName már létezik.");
+            }
+
             var user = new User
             {
                 UserName = request.UserName,
