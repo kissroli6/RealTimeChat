@@ -50,5 +50,20 @@ namespace RealTimeChat.Api.Controllers
             if (user == null) return NotFound();
             return user;
         }
+
+        // ⬇⬇⬇ ÚJ: keresés usernév alapján bejelentkezéshez
+        [HttpGet("by-username/{userName}")]
+        public async Task<ActionResult<User>> GetByUserName(string userName)
+        {
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.UserName == userName);
+
+            if (user == null)
+            {
+                return NotFound("User not found");
+            }
+
+            return user;
+        }
     }
 }

@@ -26,19 +26,28 @@ namespace RealTimeChat.Api.Controllers
             if (!roomExists) return NotFound("Room not found");
 
             var messages = await _context.ChatMessages
-                .Where(m => m.RoomId == roomId)
-                .OrderByDescending(m => m.SentAt)
-                .Skip(skip)
-                .Take(take)
-                .Select(m => new
-                {
-                    m.Id,
-                    m.RoomId,
-                    m.SenderId,
-                    m.Content,
-                    m.SentAt
-                })
-                .ToListAsync();
+    .Where(m => m.RoomId == roomId)
+    .OrderByDescending(m => m.SentAt)
+    .Skip(skip)
+    .Take(take)
+    .Include(m => m.Sender) 
+    .Select(m => new
+    {
+        m.Id,
+        m.RoomId,
+        m.SenderId,
+        m.Content,
+        m.SentAt,
+        DisplayName = m.Sender.DisplayName
+    })
+    .ToListAsync();
+
+            // régi -> új sorrend
+            messages.Reverse();
+
+            return messages;
+
+
 
             // fordítás: régi → új sorrend
             messages.Reverse();

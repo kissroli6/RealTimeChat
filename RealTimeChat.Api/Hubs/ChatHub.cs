@@ -77,14 +77,23 @@ namespace RealTimeChat.Api.Hubs
             _context.ChatMessages.Add(message);
             await _context.SaveChangesAsync();
 
+            // lekérjük a küldő display nevét
+            var senderDisplayName = await _context.Users
+                .Where(u => u.Id == senderId)
+                .Select(u => u.DisplayName)
+                .FirstOrDefaultAsync();
+
             await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", new
             {
                 message.Id,
                 message.RoomId,
                 message.SenderId,
                 message.Content,
-                message.SentAt
+                message.SentAt,
+                DisplayName = senderDisplayName
             });
+
+
         }
 
         // TYPING INDICATOR
