@@ -1,15 +1,14 @@
 // src/lib/signalrClient.ts
-
 import {
   HubConnection,
   HubConnectionBuilder,
   HubConnectionState,
   LogLevel,
 } from "@microsoft/signalr";
-import { API_BASE_URL } from "../config";
 
-// A Hub teljes URL-je
-const HUB_URL = `${API_BASE_URL}/hubs/chat`;
+const HUB_URL = "https://localhost:7274/hubs/chat";
+
+let connection: HubConnection | null = null;
 
 // --- DTO-k ---
 
@@ -19,9 +18,8 @@ export type ChatMessageDto = {
   senderId: string;
   content: string;
   sentAt: string;
-  displayName?: string;
+  displayName?: string; // ha a backend küldi a displayName-et, ezt is megkapjuk
 };
-
 
 export type TypingEvent = {
   roomId: string;
@@ -29,21 +27,9 @@ export type TypingEvent = {
   isTyping: boolean;
 };
 
-let connection: HubConnection | null = null;
+// --- belső helper: biztosan legyen Connected állapotú connection ---
 
-// --- Kapcsolat felépítése ---
-
-
-export async function startConnection(): Promise<void> {
-  // Ha már van Connected kapcsolat, nincs teendő
-  if (
-    connection &&
-    connection.state === HubConnectionState.Connected
-  ) {
-    return;
-  }
-
-  // Ha még nincs connection objektum, akkor létrehozzuk
+async function getConnectedConnection(): Promise<HubConnection> {
   if (!connection) {
     connection = new HubConnectionBuilder()
       .withUrl(HUB_URL)
@@ -52,45 +38,50 @@ export async function startConnection(): Promise<void> {
       .build();
   }
 
-  // Ha éppen Connecting/Reconnecting állapotban van, ne hívjuk újra a start-ot,
-  // csak várjuk meg, míg befejeződik.
   if (
-    connection.state === HubConnectionState.Connecting ||
-    connection.state === HubConnectionState.Reconnecting
+    connection.state === HubConnectionState.Disconnected ||
+    connection.state === HubConnectionState.Disconnecting
   ) {
-    // egyszerűen megvárjuk, míg Connected vagy Disconnected lesz
+    await connection.start();
+  } else if (connection.state === HubConnectionState.Connecting) {
+    // megvárjuk, míg átmegy Connected-be
     while (
       connection.state === HubConnectionState.Connecting ||
       connection.state === HubConnectionState.Reconnecting
     ) {
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 100));
     }
-
-    if (connection.state === HubConnectionState.Connected) {
-      return;
+    if (connection.state !== HubConnectionState.Connected) {
+      throw new Error(
+        `SignalR connection is not in Connected state. Current state: ${connection.state}`
+      );
     }
   }
 
-  // Itt biztosan nem fut a start, ezért most indultatjuk és *MEGVÁRJUK*
-  await connection.start();
-  console.log("[SignalR] Connected to hub:", HUB_URL);
-}
-
-async function getConnectedConnection(): Promise<HubConnection> {
-  await startConnection();
-  if (!connection || connection.state !== HubConnectionState.Connected) {
-    throw new Error("SignalR connection is not in Connected state.");
-  }
   return connection;
 }
 
-// --- Hub metódusok ---
+// --- publikus függvények ---
 
+export async function startConnection(): Promise<void> {
+  console.log("Starting SignalR connection...");
+  const conn = await getConnectedConnection();
+  console.log("[SignalR] Connected to hub:", HUB_URL);
+}
+
+export async function stopConnection(): Promise<void> {
+  if (connection && connection.state !== HubConnectionState.Disconnected) {
+    await connection.stop();
+  }
+}
+
+// user regisztráció (ChatHub.Register)
 export async function registerUser(userId: string): Promise<void> {
   const conn = await getConnectedConnection();
   await conn.invoke("Register", userId);
 }
 
+// szobába belépés / kilépés
 export async function joinRoom(roomId: string): Promise<void> {
   const conn = await getConnectedConnection();
   await conn.invoke("JoinRoom", roomId);
@@ -101,6 +92,7 @@ export async function leaveRoom(roomId: string): Promise<void> {
   await conn.invoke("LeaveRoom", roomId);
 }
 
+// üzenet küldése szobába
 export async function sendMessageToRoom(
   roomId: string,
   senderId: string,
@@ -110,7 +102,7 @@ export async function sendMessageToRoom(
   await conn.invoke("SendMessageToRoom", roomId, senderId, content);
 }
 
-// Typing jelzés küldése
+// gépelés jelzése
 export async function sendTyping(
   roomId: string,
   userId: string,
@@ -120,46 +112,48 @@ export async function sendTyping(
   await conn.invoke("Typing", roomId, userId, isTyping);
 }
 
-// --- Eventek feliratkozása ---
+// --- event handler regisztrációk ---
+// FONTOS: .off(...) minden .on(...) előtt → csak 1 handler marad, nincs duplázás
 
-// Új üzenet érkezett egy szobába
-export function onMessageReceived(handler: (msg: ChatMessageDto) => void): void {
+export function onMessageReceived(
+  handler: (msg: ChatMessageDto) => void
+): void {
   if (!connection) {
+    // a startConnection úgyis létrehozza majd, utána hívd meg újra ezt a függvényt
     return;
   }
 
+  connection.off("ReceiveMessage");
   connection.on("ReceiveMessage", (msg: ChatMessageDto) => {
     handler(msg);
   });
 }
 
-// Valaki gépel egy szobában
 export function onUserTyping(handler: (ev: TypingEvent) => void): void {
   if (!connection) {
     return;
   }
 
-  // Backend: new { RoomId, UserId, IsTyping } → camelCase: roomId, userId, isTyping
-  connection.on("UserTyping", (payload: TypingEvent) => {
-    handler(payload);
+  connection.off("UserTyping");
+  connection.on("UserTyping", (ev: TypingEvent) => {
+    handler(ev);
   });
 }
-export async function stopConnection(): Promise<void> {
-  if (connection) {
-    try {
-      await connection.stop();
-      console.log("[SignalR] Connection stopped.");
-    } catch (err) {
-      console.warn("[SignalR] stopConnection error:", err);
-    }
-  }
-}
 
-export function clearHandlers(connection: HubConnection) {
-    connection.off("ReceiveMessage");
-    connection.off("UserJoinedRoom");
-    connection.off("UserLeftRoom");
-    connection.off("UserTyping");
-    connection.off("UserOnline");
-    connection.off("UserOffline");
+// opcionális: ha nem akarod látni a "No client method 'useronline'" warningot,
+// ide tehetsz üres handlereket is:
+
+export function registerPresenceHandlers(): void {
+  if (!connection) return;
+
+  // csak azért, hogy ne logoljon warningot
+  connection.off("UserOnline");
+  connection.off("UserOffline");
+  connection.off("UserJoinedRoom");
+  connection.off("UserLeftRoom");
+
+  connection.on("UserOnline", () => {});
+  connection.on("UserOffline", () => {});
+  connection.on("UserJoinedRoom", () => {});
+  connection.on("UserLeftRoom", () => {});
 }

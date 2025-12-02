@@ -65,5 +65,16 @@ namespace RealTimeChat.Api.Controllers
 
             return user;
         }
+        // GET: api/users   → felhasználók listája (DM listához)
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<User>>> GetAllUsers()
+        {
+            var users = await _context.Users
+                .OrderBy(u => u.DisplayName)
+                .ToListAsync();
+
+            return users;
+        }
+
     }
 }
