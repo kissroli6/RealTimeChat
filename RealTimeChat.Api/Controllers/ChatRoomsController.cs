@@ -6,7 +6,7 @@ using RealTimeChat.Api.Models;
 namespace RealTimeChat.Api.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/rooms")]
     public class ChatRoomsController : ControllerBase
     {
         private readonly ChatDbContext _context;
@@ -16,114 +16,22 @@ namespace RealTimeChat.Api.Controllers
             _context = context;
         }
 
-        public class CreateRoomRequest
+        // DTO, amit a /for-user és a /direct is használ
+        public class RoomForUserDto
         {
+            public Guid Id { get; set; }
             public string Name { get; set; } = default!;
             public bool IsPrivate { get; set; }
+
+            // DM esetén: a másik fél adatai
+            public Guid? OtherUserId { get; set; }
+            public string? OtherDisplayName { get; set; }
         }
 
-        public class CreateDirectRoomRequest
-        {
-            public Guid UserAId { get; set; }
-            public Guid UserBId { get; set; }
-        }
-
-        // Public (vagy opcionálisan minden) room listázása
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<ChatRoom>>> GetRooms([FromQuery] bool includePrivate = false)
-        {
-            var query = _context.ChatRooms.AsQueryable();
-
-            if (!includePrivate)
-            {
-                query = query.Where(r => !r.IsPrivate);
-            }
-
-            var rooms = await query
-                .OrderBy(r => r.Name)
-                .ToListAsync();
-
-            return rooms;
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<ChatRoom>> CreateRoom([FromBody] CreateRoomRequest request)
-        {
-            var room = new ChatRoom
-            {
-                Name = request.Name,
-                IsPrivate = request.IsPrivate
-            };
-
-            _context.ChatRooms.Add(room);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetRoom), new { id = room.Id }, room);
-        }
-
-        [HttpGet("{id:guid}")]
-        public async Task<ActionResult<ChatRoom>> GetRoom(Guid id)
-        {
-            var room = await _context.ChatRooms.FindAsync(id);
-            if (room == null) return NotFound();
-            return room;
-        }
-
-        [HttpPost("direct")]
-        public async Task<ActionResult<ChatRoom>> CreateDirectRoom([FromBody] CreateDirectRoomRequest request)
-        {
-            if (request.UserAId == request.UserBId)
-            {
-                return BadRequest("A két felhasználó nem lehet ugyanaz.");
-            }
-
-            // rendezzük a GUID-okat, hogy (A,B) és (B,A) ugyanazt jelentse
-            var first = request.UserAId;
-            var second = request.UserBId;
-
-            if (first.CompareTo(second) > 0)
-            {
-                (first, second) = (second, first);
-            }
-
-            var users = await _context.Users
-                .Where(u => u.Id == first || u.Id == second)
-                .ToListAsync();
-
-            if (users.Count != 2)
-            {
-                return BadRequest("Az egyik vagy mindkét felhasználó nem létezik.");
-            }
-
-            // van-e már ilyen privát DM szoba?
-            var existing = await _context.ChatRooms
-                .FirstOrDefaultAsync(r =>
-                    r.IsPrivate &&
-                    r.UserAId == first &&
-                    r.UserBId == second);
-
-            if (existing != null)
-            {
-                return Ok(existing);
-            }
-
-            // új DM szoba létrehozása
-            var room = new ChatRoom
-            {
-                Name = $"DM-{first}-{second}",
-                IsPrivate = true,
-                UserAId = first,
-                UserBId = second
-            };
-
-            _context.ChatRooms.Add(room);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetRoom), new { id = room.Id }, room);
-        }
-
-        [HttpGet("direct/user/{userId:guid}")]
-        public async Task<ActionResult<IEnumerable<ChatRoom>>> GetDirectRoomsForUser(Guid userId)
+        // ÖSSZES szoba az adott usernek (publikus + DM)
+        // GET: api/rooms/for-user/{userId}
+        [HttpGet("for-user/{userId:guid}")]
+        public async Task<ActionResult<IEnumerable<RoomForUserDto>>> GetRoomsForUser(Guid userId)
         {
             var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
             if (!userExists)
@@ -131,13 +39,127 @@ namespace RealTimeChat.Api.Controllers
                 return NotFound("User not found");
             }
 
-            var rooms = await _context.ChatRooms
+            // 1) Publikus szobák – mindenki látja
+            var publicRooms = await _context.ChatRooms
+                .Where(r => !r.IsPrivate)
+                .OrderBy(r => r.Name)
+                .Select(r => new RoomForUserDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    IsPrivate = r.IsPrivate,
+                    OtherUserId = null,
+                    OtherDisplayName = null
+                })
+                .ToListAsync();
+
+            // 2) DM szobák – ahol benne van a user
+            var dmRooms = await _context.ChatRooms
                 .Where(r => r.IsPrivate &&
                             (r.UserAId == userId || r.UserBId == userId))
+                .Include(r => r.UserA)
+                .Include(r => r.UserB)
                 .OrderBy(r => r.CreatedAt)
                 .ToListAsync();
 
-            return rooms;
+            var dmDtos = dmRooms.Select(r =>
+            {
+                var other = r.UserAId == userId ? r.UserB : r.UserA;
+
+                return new RoomForUserDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    IsPrivate = true,
+                    OtherUserId = other?.Id,
+                    OtherDisplayName = other?.DisplayName
+                };
+            });
+
+            var result = publicRooms.Concat(dmDtos).ToList();
+            return result;
+        }
+
+        // Egy konkrét szoba lekérése
+        // GET: api/rooms/{id}
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<ChatRoom>> GetRoom(Guid id)
+        {
+            var room = await _context.ChatRooms.FindAsync(id);
+            if (room == null)
+            {
+                return NotFound();
+            }
+
+            return room;
+        }
+
+        // Új publikus szoba létrehozása
+        // POST: api/rooms
+        [HttpPost]
+        public async Task<ActionResult<ChatRoom>> CreateRoom(ChatRoom room)
+        {
+            room.Id = Guid.NewGuid();
+            _context.ChatRooms.Add(room);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetRoom), new { id = room.Id }, room);
+        }
+
+        // DM szoba létrehozása / lekérése két user között
+        // POST: api/rooms/direct?userId=...&targetUserId=...
+        [HttpPost("direct")]
+        public async Task<ActionResult<RoomForUserDto>> CreateOrGetDirectRoom(
+            [FromQuery] Guid userId,
+            [FromQuery] Guid targetUserId)
+        {
+            if (userId == targetUserId)
+            {
+                return BadRequest("Cannot create DM with yourself.");
+            }
+
+            var existing = await _context.ChatRooms
+                .Include(r => r.UserA)
+                .Include(r => r.UserB)
+                .FirstOrDefaultAsync(r =>
+                    r.IsPrivate &&
+                    ((r.UserAId == userId && r.UserBId == targetUserId) ||
+                     (r.UserAId == targetUserId && r.UserBId == userId)));
+
+            if (existing == null)
+            {
+                var userA = await _context.Users.FindAsync(userId);
+                var userB = await _context.Users.FindAsync(targetUserId);
+                if (userA == null || userB == null)
+                {
+                    return BadRequest("User not found.");
+                }
+
+                existing = new ChatRoom
+                {
+                    Id = Guid.NewGuid(),
+                    IsPrivate = true,
+                    Name = "DM", // a feliratot a frontend fogja képezni (pl. "DM: Roli")
+                    UserAId = userA.Id,
+                    UserBId = userB.Id
+                };
+
+                _context.ChatRooms.Add(existing);
+                await _context.SaveChangesAsync();
+            }
+
+            var other = existing.UserAId == userId ? existing.UserB : existing.UserA;
+
+            var dto = new RoomForUserDto
+            {
+                Id = existing.Id,
+                Name = existing.Name,
+                IsPrivate = existing.IsPrivate,
+                OtherUserId = other?.Id,
+                OtherDisplayName = other?.DisplayName
+            };
+
+            return Ok(dto);
         }
     }
 }

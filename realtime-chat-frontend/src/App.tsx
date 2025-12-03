@@ -19,22 +19,27 @@ import {
   getAllUsers,
   type UserDto,
 } from "./api/users";
-import {
-  getDirectRoomsForUser,
-  createDirectRoom,
-  type ChatRoomDto,
-} from "./api/chatRooms";
+import { api } from "./api/client";
 
-// Ezek a room ID-k a DB-ben létező ChatRoom.Id értékek
-const GENERAL_ROOM_ID = "cfc347f1-18c9-4b96-a6b9-c8910d3b9c1e";
-const DEVS_ROOM_ID = "6fc64c97-d794-493d-bf28-f94534383321";
+// Backend DTO a /api/rooms/for-user és /api/rooms/direct válaszhoz
+type RoomForUserDto = {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+  otherUserId?: string | null;
+  otherDisplayName?: string | null;
+};
 
+// UI-ban használt room típus
 type ChatRoom = {
   id: string;
   name: string;
   isPrivate: boolean;
+  otherUserId?: string;
+  otherDisplayName?: string;
 };
 
+// UI-ban használt message típus
 type UiMessage = {
   id: string;
   roomId: string;
@@ -54,14 +59,11 @@ type CurrentUser = {
 const LOCAL_STORAGE_USER_KEY = "rtc_current_user";
 
 function App() {
-  // --- Rooms state: publikus + DM szobák is ide kerülnek ---
-  const [rooms, setRooms] = useState<ChatRoom[]>([
-    { id: GENERAL_ROOM_ID, name: "General", isPrivate: false },
-    { id: DEVS_ROOM_ID, name: "Developers", isPrivate: false },
-  ]);
-
-  const [selectedRoomId, setSelectedRoomId] =
-    useState<string>(GENERAL_ROOM_ID);
+  // Dinamikus rooms lista (public + DM)
+  const [rooms, setRooms] = useState<ChatRoom[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(
+    null
+  );
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [messageInput, setMessageInput] = useState("");
@@ -74,7 +76,7 @@ function App() {
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingRef = useRef(false);
 
-  const selectedRoomRef = useRef<string>(selectedRoomId);
+  const selectedRoomRef = useRef<string | null>(selectedRoomId);
   useEffect(() => {
     selectedRoomRef.current = selectedRoomId;
   }, [selectedRoomId]);
@@ -84,33 +86,22 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // DM user list (modal) state
+  // User lista DM-hez
   const [allUsers, setAllUsers] = useState<UserDto[]>([]);
   const [isUserListOpen, setIsUserListOpen] = useState(false);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersError, setUsersError] = useState<string | null>(null);
+  const [userListError, setUserListError] = useState<string | null>(
+    null
+  );
 
-  // --- Segéd: UiMessage építése backend DTO-ból + user listából ---
-
-  function mapDtoToUiMessage(
-    dto: ChatMessageDto,
-    selfId: string,
-    users: UserDto[]
-  ): UiMessage {
-    const sender = users.find((u) => u.id === dto.senderId);
-    return {
-      ...dto,
-      isOwn: dto.senderId.toLowerCase() === selfId.toLowerCase(),
-      displayName: sender?.displayName ?? undefined,
-    };
-  }
-
-  // --- SignalR + history init egy konkrét userrel ---
+  // --- SignalR + history + rooms init egy konkrét userrel ---
 
   async function initForUser(user: CurrentUser): Promise<void> {
     setIsInitializing(true);
     setMessages([]);
     setTypingUsers([]);
+    setRooms([]);
+    setSelectedRoomId(null);
+    selectedRoomRef.current = null;
 
     try {
       console.log("Starting SignalR connection...");
@@ -119,37 +110,25 @@ function App() {
 
       await registerUser(user.id);
 
-      // Előre betöltjük az összes usert (DM listához + displayName-ekhez)
-      let usersForLookup: UserDto[] = [];
-      try {
-        const users = await getAllUsers();
-        usersForLookup = users;
-        setAllUsers(
-          users.filter(
-            (u) =>
-              u.id.toLowerCase() !== user.id.toLowerCase()
-          )
-        );
-      } catch (err) {
-        console.error("getAllUsers error:", err);
-        usersForLookup = [];
-      }
-
       // Új üzenetek fogadása
-      onMessageReceived((msg) => {
+      onMessageReceived((msg: ChatMessageDto) => {
         setMessages((prev) => [
           ...prev,
-          mapDtoToUiMessage(msg, user.id, usersForLookup),
+          {
+            ...msg,
+            isOwn:
+              msg.senderId.toLowerCase() === user.id.toLowerCase(),
+          },
         ]);
       });
 
       // Typing események figyelése
       onUserTyping((ev: TypingEvent) => {
+        const currentRoomId = selectedRoomRef.current;
+        if (!currentRoomId) return;
+
         // csak az aktuális szoba érdekel
-        if (
-          ev.roomId.toLowerCase() !==
-          selectedRoomRef.current.toLowerCase()
-        ) {
+        if (ev.roomId.toLowerCase() !== currentRoomId.toLowerCase()) {
           return;
         }
 
@@ -169,64 +148,40 @@ function App() {
         });
       });
 
-      // belépés a default (General) szobába + history betöltése
-      await joinRoom(GENERAL_ROOM_ID);
-      const history = await fetchMessagesForRoom(GENERAL_ROOM_ID);
-
-      setMessages(
-        history.map((m) =>
-          mapDtoToUiMessage(m, user.id, usersForLookup)
-        )
+      // Szobák betöltése az adott usernek (public + DM)
+      const roomsRes = await api.get<RoomForUserDto[]>(
+        `/api/rooms/for-user/${user.id}`
       );
 
-      // --- DM szobák betöltése a userhez ---
-      try {
-        const dmRooms = await getDirectRoomsForUser(user.id);
+      const mappedRooms: ChatRoom[] = roomsRes.data.map((r) => ({
+        id: r.id,
+        name: r.name,
+        isPrivate: r.isPrivate,
+        otherUserId: r.otherUserId ?? undefined,
+        otherDisplayName: r.otherDisplayName ?? undefined,
+      }));
 
-        setRooms((prev) => {
-          const baseRooms = prev.filter((r) => !r.isPrivate);
+      setRooms(mappedRooms);
 
-          const dmUiRooms: ChatRoom[] = dmRooms.map(
-            (r: ChatRoomDto) => {
-              const otherId =
-                r.userAId?.toLowerCase() ===
-                user.id.toLowerCase()
-                  ? r.userBId
-                  : r.userAId;
+      // Ha van legalább egy szoba, lépjünk be az elsőbe + töltsük a historyt
+      if (mappedRooms.length > 0) {
+        const first = mappedRooms[0];
+        setSelectedRoomId(first.id);
+        selectedRoomRef.current = first.id;
 
-              const otherUser = usersForLookup.find(
-                (u) => u.id === otherId
-              );
-
-              return {
-                id: r.id,
-                name: otherUser?.displayName ?? r.name,
-                isPrivate: true,
-              };
-            }
-          );
-
-          const existingIds = new Set(
-            baseRooms.map((r) => r.id)
-          );
-          const merged = [...baseRooms];
-
-          for (const dm of dmUiRooms) {
-            if (!existingIds.has(dm.id)) {
-              merged.push(dm);
-            }
-          }
-
-          return merged;
-        });
-      } catch (err) {
-        console.error("getDirectRoomsForUser error:", err);
+        await joinRoom(first.id);
+        const history = await fetchMessagesForRoom(first.id);
+        setMessages(
+          history.map((m) => ({
+            ...m,
+            isOwn:
+              m.senderId.toLowerCase() === user.id.toLowerCase(),
+          }))
+        );
       }
     } catch (err) {
       console.error("SignalR init error:", err);
-      setLoginError(
-        "Nem sikerült csatlakozni a chat szerverhez."
-      );
+      setLoginError("Nem sikerült csatlakozni a chat szerverhez.");
     } finally {
       setIsInitializing(false);
     }
@@ -236,16 +191,16 @@ function App() {
 
   useEffect(() => {
     const stored = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-    if (!stored) return;
-
-    try {
-      const parsed = JSON.parse(stored) as CurrentUser;
-      if (parsed.id && parsed.userName) {
-        setCurrentUser(parsed);
-        void initForUser(parsed);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as CurrentUser;
+        if (parsed.id && parsed.userName) {
+          setCurrentUser(parsed);
+          void initForUser(parsed);
+        }
+      } catch {
+        localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
       }
-    } catch {
-      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
     }
 
     return () => {
@@ -269,7 +224,7 @@ function App() {
 
     try {
       setIsInitializing(true);
-      const dto: UserDto = await getUserByUserName(trimmed);
+      const dto = await getUserByUserName(trimmed);
 
       const user: CurrentUser = {
         id: dto.id,
@@ -290,137 +245,59 @@ function App() {
       if (status === 404) {
         setLoginError("Nincs ilyen felhasználó.");
       } else {
-        setLoginError(
-          "Váratlan hiba történt bejelentkezés közben."
-        );
+        setLoginError("Váratlan hiba történt bejelentkezés közben.");
       }
     } finally {
       setIsInitializing(false);
     }
   };
 
+  // --- Logout ---
+
   const handleLogout = async () => {
     await stopConnection();
     localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+
     setCurrentUser(null);
     setMessages([]);
     setTypingUsers([]);
     setMessageInput("");
-    setRooms([
-      { id: GENERAL_ROOM_ID, name: "General", isPrivate: false },
-      { id: DEVS_ROOM_ID, name: "Developers", isPrivate: false },
-    ]);
-    setSelectedRoomId(GENERAL_ROOM_ID);
-  };
-
-  // --- DM user list megnyitása ---
-
-  const openUserList = async () => {
-    if (!currentUser) return;
-    setUsersError(null);
-    setIsUserListOpen(true);
-
-    if (allUsers.length === 0) {
-      setUsersLoading(true);
-      try {
-        const users = await getAllUsers();
-        setAllUsers(
-          users.filter(
-            (u) =>
-              u.id.toLowerCase() !== currentUser.id.toLowerCase()
-          )
-        );
-      } catch (err) {
-        console.error("User list load error:", err);
-        setUsersError(
-          "Nem sikerült betölteni a felhasználókat."
-        );
-      } finally {
-        setUsersLoading(false);
-      }
-    }
-  };
-
-  const closeUserList = () => {
-    setIsUserListOpen(false);
-  };
-
-  // --- DM indítása kiválasztott userrel ---
-
-  const startDmWithUser = async (target: UserDto) => {
-    if (!currentUser) return;
-
-    try {
-      const roomDto = await createDirectRoom(
-        currentUser.id,
-        target.id
-      );
-
-      const dmRoom: ChatRoom = {
-        id: roomDto.id,
-        name: target.displayName,
-        isPrivate: true,
-      };
-
-      setRooms((prev) => {
-        if (prev.some((r) => r.id === dmRoom.id)) {
-          return prev;
-        }
-        return [...prev, dmRoom];
-      });
-
-      // átváltunk a DM szobára
-      await handleRoomClick(dmRoom.id);
-      setIsUserListOpen(false);
-    } catch (err) {
-      console.error("startDmWithUser error:", err);
-      setUsersError(
-        "Nem sikerült elindítani a privát beszélgetést."
-      );
-    }
+    setRooms([]);
+    setSelectedRoomId(null);
+    selectedRoomRef.current = null;
   };
 
   // --- Szoba váltás ---
 
   const handleRoomClick = async (roomId: string) => {
-    if (roomId === selectedRoomId) return;
     if (!currentUser) return;
+    if (roomId === selectedRoomId) return;
 
     const previousRoomId = selectedRoomId;
     setSelectedRoomId(roomId);
+    selectedRoomRef.current = roomId;
     setMessages([]);
     setTypingUsers([]);
 
-    try {
-      await leaveRoom(previousRoomId);
-    } catch (err) {
-      console.warn("LeaveRoom error (ignored):", err);
-    }
-
-    await joinRoom(roomId);
-    const history = await fetchMessagesForRoom(roomId);
-
-    // a history mappinghez szükségünk van a teljes user listára
-    let usersForLookup = allUsers;
-    if (usersForLookup.length === 0) {
+    // előző szobából kilépés
+    if (previousRoomId) {
       try {
-        usersForLookup = await getAllUsers();
-        setAllUsers(
-          usersForLookup.filter(
-            (u) =>
-              u.id.toLowerCase() !== currentUser.id.toLowerCase()
-          )
-        );
+        await leaveRoom(previousRoomId);
       } catch (err) {
-        console.error("getAllUsers (on room change) error:", err);
-        usersForLookup = [];
+        console.warn("LeaveRoom error (ignored):", err);
       }
     }
 
+    // új szobához csatlakozás + history betöltés
+    await joinRoom(roomId);
+    const history = await fetchMessagesForRoom(roomId);
     setMessages(
-      history.map((m) =>
-        mapDtoToUiMessage(m, currentUser.id, usersForLookup)
-      )
+      history.map((m) => ({
+        ...m,
+        isOwn:
+          m.senderId.toLowerCase() ===
+          currentUser.id.toLowerCase(),
+      }))
     );
   };
 
@@ -432,8 +309,9 @@ function App() {
     const value = e.target.value;
     setMessageInput(value);
 
-    if (!currentUser) return;
+    if (!currentUser || !selectedRoomId) return;
 
+    // első gépeléskor küldünk "isTyping: true"-t
     if (!isTypingRef.current) {
       isTypingRef.current = true;
       try {
@@ -443,12 +321,13 @@ function App() {
       }
     }
 
+    // debounced leállítás: ha 2s-ig nincs új input, küldünk false-t
     if (typingTimeoutRef.current) {
       window.clearTimeout(typingTimeoutRef.current);
     }
 
     typingTimeoutRef.current = window.setTimeout(async () => {
-      if (!currentUser) return;
+      if (!currentUser || !selectedRoomId) return;
       isTypingRef.current = false;
       try {
         await sendTyping(selectedRoomId, currentUser.id, false);
@@ -461,23 +340,84 @@ function App() {
   // --- Üzenet küldése ---
 
   const handleSend = async () => {
-    if (!messageInput.trim() || !currentUser) return;
+    if (!messageInput.trim() || !currentUser || !selectedRoomId) {
+      return;
+    }
 
     const content = messageInput.trim();
     setMessageInput("");
 
     try {
-      await sendMessageToRoom(
-        selectedRoomId,
-        currentUser.id,
-        content
-      );
+      await sendMessageToRoom(selectedRoomId, currentUser.id, content);
     } catch (err) {
       console.error("SendMessageToRoom error:", err);
     }
   };
 
+  // --- User lista megnyitása DM-hez ---
+
+  const openUserList = async () => {
+    if (!currentUser) return;
+    setUserListError(null);
+
+    try {
+      const users = await getAllUsers();
+      const filtered = users.filter((u) => u.id !== currentUser.id);
+      setAllUsers(filtered);
+      setIsUserListOpen(true);
+    } catch (err) {
+      console.error("getAllUsers error:", err);
+      setUserListError("Nem sikerült betölteni a felhasználókat.");
+      setIsUserListOpen(true);
+    }
+  };
+
+  // DM szoba létrehozása / megnyitása
+  const handleOpenDmWith = async (target: UserDto) => {
+    if (!currentUser) return;
+
+    try {
+      const res = await api.post<RoomForUserDto>("/api/rooms/direct", null, {
+        params: {
+          userId: currentUser.id,
+          targetUserId: target.id,
+        },
+      });
+
+      const r = res.data;
+
+      const dmRoom: ChatRoom = {
+        id: r.id,
+        name: r.name,
+        isPrivate: r.isPrivate,
+        otherUserId: r.otherUserId ?? target.id,
+        otherDisplayName: r.otherDisplayName ?? target.displayName,
+      };
+
+      setRooms((prev) => {
+        const exists = prev.find((x) => x.id === dmRoom.id);
+        if (exists) return prev;
+        return [...prev, dmRoom];
+      });
+
+      setIsUserListOpen(false);
+
+      // átváltás a DM szobára
+      await handleRoomClick(dmRoom.id);
+    } catch (err) {
+      console.error("DM open error:", err);
+      setUserListError(
+        "Nem sikerült megnyitni a privát beszélgetést."
+      );
+    }
+  };
+
   const activeRoom = rooms.find((r) => r.id === selectedRoomId);
+
+  const activeRoomLabel =
+    activeRoom && activeRoom.isPrivate && activeRoom.otherDisplayName
+      ? `DM: ${activeRoom.otherDisplayName}`
+      : activeRoom?.name ?? "Room";
 
   // --- LOGIN KÉPERNYŐ, ha nincs currentUser ---
 
@@ -590,12 +530,12 @@ function App() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      <div style={{ maxWidth: "900px", width: "100%" }}>
+      <div style={{ maxWidth: "960px", width: "100%" }}>
         <h1 style={{ fontSize: "32px", marginBottom: "8px" }}>
           Real-Time Chat
         </h1>
         <p style={{ marginBottom: "16px", color: "#aaa" }}>
-          SignalR frontend
+          SignalR frontend (rooms + DM)
         </p>
 
         <p style={{ marginBottom: "16px", color: "#aaa" }}>
@@ -619,59 +559,88 @@ function App() {
           >
             Kijelentkezés
           </button>
-          <button
-            onClick={openUserList}
-            style={{
-              marginLeft: "8px",
-              padding: "4px 10px",
-              borderRadius: "999px",
-              border: "none",
-              backgroundColor: "#333",
-              color: "#fff",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-          >
-            Felhasználók
-          </button>
         </p>
 
         <div style={{ display: "flex", gap: "24px" }}>
-          {/* Rooms */}
-          <div style={{ minWidth: "180px" }}>
-            <h2 style={{ fontSize: "18px", marginBottom: "8px" }}>
-              Rooms
-            </h2>
+          {/* Rooms oszlop */}
+          <div style={{ minWidth: "200px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "18px",
+                  marginBottom: "0",
+                }}
+              >
+                Rooms
+              </h2>
+              <button
+                onClick={openUserList}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "999px",
+                  border: "none",
+                  backgroundColor: "#333",
+                  color: "#f5f5f5",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                }}
+              >
+                Felhasználók
+              </button>
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column" }}>
-              {rooms.map((room) => (
-                <button
-                  key={room.id}
-                  onClick={() => handleRoomClick(room.id)}
-                  style={{
-                    marginBottom: "8px",
-                    padding: "8px 12px",
-                    borderRadius: "999px",
-                    border: "none",
-                    cursor: "pointer",
-                    backgroundColor:
-                      room.id === selectedRoomId ? "#f5f5f5" : "#333",
-                    color:
-                      room.id === selectedRoomId ? "#111" : "#f5f5f5",
-                    textAlign: "left",
-                  }}
-                >
-                  {room.isPrivate ? `DM: ${room.name}` : room.name}
-                </button>
-              ))}
+              {rooms.map((room) => {
+                const label =
+                  room.isPrivate && room.otherDisplayName
+                    ? `DM: ${room.otherDisplayName}`
+                    : room.name;
+
+                return (
+                  <button
+                    key={room.id}
+                    onClick={() => void handleRoomClick(room.id)}
+                    style={{
+                      marginBottom: "8px",
+                      padding: "8px 12px",
+                      borderRadius: "999px",
+                      border: "none",
+                      cursor: "pointer",
+                      backgroundColor:
+                        room.id === selectedRoomId
+                          ? "#f5f5f5"
+                          : "#333",
+                      color:
+                        room.id === selectedRoomId
+                          ? "#111"
+                          : "#f5f5f5",
+                      textAlign: "left",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+
+              {rooms.length === 0 && (
+                <p style={{ fontSize: "13px", color: "#777" }}>
+                  Nincsenek elérhető szobák.
+                </p>
+              )}
             </div>
           </div>
 
           {/* Chat panel */}
           <div style={{ flex: 1 }}>
             <h2 style={{ fontSize: "20px", marginBottom: "12px" }}>
-              {activeRoom?.isPrivate
-                ? `DM: ${activeRoom.name}`
-                : activeRoom?.name ?? "Room"}
+              {activeRoomLabel}
             </h2>
 
             <div
@@ -693,10 +662,7 @@ function App() {
                 }}
               >
                 {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    style={{ marginBottom: "10px" }}
-                  >
+                  <div key={m.id} style={{ marginBottom: "10px" }}>
                     {!m.isOwn && (
                       <div
                         style={{
@@ -788,111 +754,102 @@ function App() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* FELHASZNÁLÓLISTA MODAL */}
-      {isUserListOpen && (
-        <div
-          onClick={closeUserList}
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 999,
-          }}
-        >
+        {/* User lista DM-hez – egyszerű “modal” */}
+        {isUserListOpen && (
           <div
-            onClick={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: "#181818",
-              padding: "16px 20px",
-              borderRadius: "16px",
-              width: "100%",
-              maxWidth: "360px",
-              maxHeight: "400px",
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(0,0,0,0.6)",
               display: "flex",
-              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <div
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "8px",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "18px" }}>
-                Felhasználók
-              </h3>
-              <button
-                onClick={closeUserList}
-                style={{
-                  border: "none",
-                  background: "transparent",
-                  color: "#aaa",
-                  cursor: "pointer",
-                  fontSize: "16px",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {usersLoading && (
-              <p style={{ fontSize: "13px", color: "#aaa" }}>
-                Betöltés...
-              </p>
-            )}
-
-            {usersError && (
-              <p style={{ fontSize: "13px", color: "#ff6b6b" }}>
-                {usersError}
-              </p>
-            )}
-
-            {!usersLoading && !usersError && allUsers.length === 0 && (
-              <p style={{ fontSize: "13px", color: "#aaa" }}>
-                Nincs más felhasználó.
-              </p>
-            )}
-
-            <div
-              style={{
-                marginTop: "8px",
+                width: "360px",
+                maxHeight: "480px",
+                backgroundColor: "#181818",
+                borderRadius: "12px",
+                padding: "16px",
                 overflowY: "auto",
               }}
             >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "12px",
+                }}
+              >
+                <h3 style={{ margin: 0 }}>Felhasználók</h3>
+                <button
+                  onClick={() => setIsUserListOpen(false)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#f5f5f5",
+                    cursor: "pointer",
+                    fontSize: "18px",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {userListError && (
+                <p
+                  style={{
+                    color: "#ff6b6b",
+                    fontSize: "13px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {userListError}
+                </p>
+              )}
+
               {allUsers.map((u) => (
                 <button
                   key={u.id}
-                  onClick={() => void startDmWithUser(u)}
+                  onClick={() => void handleOpenDmWith(u)}
                   style={{
                     width: "100%",
                     textAlign: "left",
-                    padding: "6px 10px",
-                    marginBottom: "4px",
-                    borderRadius: "999px",
+                    padding: "6px 8px",
+                    borderRadius: "8px",
                     border: "none",
-                    backgroundColor: "#333",
+                    backgroundColor: "#222",
                     color: "#f5f5f5",
                     cursor: "pointer",
+                    marginBottom: "6px",
                     fontSize: "14px",
                   }}
                 >
-                  {u.displayName}{" "}
-                  <span style={{ fontSize: "11px", color: "#aaa" }}>
-                    ({u.userName})
-                  </span>
+                  <div>{u.displayName}</div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#999",
+                    }}
+                  >
+                    {u.userName}
+                  </div>
                 </button>
               ))}
+
+              {allUsers.length === 0 && !userListError && (
+                <p style={{ fontSize: "13px", color: "#777" }}>
+                  Nincs más felhasználó.
+                </p>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
