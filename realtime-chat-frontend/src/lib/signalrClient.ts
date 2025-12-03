@@ -5,23 +5,8 @@ import {
   HubConnectionState,
   LogLevel,
 } from "@microsoft/signalr";
-
-export type ChatMessageDto = {
-  id: string;
-  roomId: string;
-  senderId: string;
-  content: string;
-  sentAt: string;
-  displayName?: string;
-};
-
-export type TypingEvent = {
-  roomId: string;
-  userId: string;
-  isTyping: boolean;
-};
-
-const HUB_URL = "https://localhost:7274/hubs/chat";
+import type { ChatMessageDto, TypingEvent } from "../types/message";
+import { HUB_URL } from "../config";
 
 let connection: HubConnection | null = null;
 let startPromise: Promise<void> | null = null;
