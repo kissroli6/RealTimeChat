@@ -1,7 +1,7 @@
 // src/api/messages.ts
 
 import { api } from "./client";
-import type { ChatMessageDto } from "../lib/signalrClient";
+import type { ChatMessageDto } from "../types/message";
 
 // History egy szobához: GET /api/rooms/{roomId}/messages
 export async function fetchMessagesForRoom(
