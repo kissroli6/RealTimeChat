@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { fetchMessagesForRoom } from "./api/messages";
 import { api } from "./api/client";
 import { getUserByUserName, getAllUsers } from "./api/users";
@@ -177,9 +178,9 @@ function App() {
 
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
       await initializeForUser(user);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Login error:", err);
-      const status = err?.response?.status;
+      const status = isAxiosError(err) ? err.response?.status : undefined;
 
       if (status === 404) {
         setLoginError("Nincs ilyen felhasználó.");

@@ -4,7 +4,7 @@ export interface UserDto {
   displayName: string;
 }
 
-export interface CurrentUser extends UserDto {}
+export type CurrentUser = UserDto;
 
 export interface UserWithPresence extends UserDto {
   isOnline?: boolean;
