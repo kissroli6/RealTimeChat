@@ -2,6 +2,7 @@
 import {
   HubConnection,
   HubConnectionBuilder,
+  HubConnectionState,
   LogLevel,
 } from "@microsoft/signalr";
 
@@ -20,12 +21,12 @@ export type TypingEvent = {
   isTyping: boolean;
 };
 
+const HUB_URL = "https://localhost:7274/hubs/chat";
+
 let connection: HubConnection | null = null;
 let startPromise: Promise<void> | null = null;
 
-const HUB_URL = "https://localhost:7274/hubs/chat";
-
-// --- helper: aktuális connection, de NEM dob hibát ---
+// ---- helper: biztos Connected state ----
 
 function ensureConnectedOrWarn(op: string): HubConnection | null {
   if (!connection) {
@@ -33,7 +34,7 @@ function ensureConnectedOrWarn(op: string): HubConnection | null {
     return null;
   }
 
-  if (connection.state !== "Connected") {
+  if (connection.state !== HubConnectionState.Connected) {
     console.warn(
       `[SignalR] ${op} called but connection state is '${connection.state}'.`
     );
@@ -43,15 +44,23 @@ function ensureConnectedOrWarn(op: string): HubConnection | null {
   return connection;
 }
 
-// --- PUBLIC API ---
+// ---- kliens oldali callbackek ----
+
+let messageHandler: ((msg: ChatMessageDto) => void) | null = null;
+let typingHandler: ((ev: TypingEvent) => void) | null = null;
+let initialOnlineHandler: ((userIds: string[]) => void) | null = null;
+let userOnlineHandler: ((userId: string) => void) | null = null;
+let userOfflineHandler: ((userId: string) => void) | null = null;
+
+// ---- kapcsolat indítása ----
 
 export async function startConnection(): Promise<void> {
-  // már kész
-  if (connection && connection.state === "Connected") {
+  // már van Connected kapcsolat
+  if (connection && connection.state === HubConnectionState.Connected) {
     return;
   }
 
-  // már folyamatban lévő start – csak várjuk meg
+  // már folyamatban van a start()
   if (startPromise) {
     await startPromise;
     return;
@@ -86,14 +95,24 @@ export async function startConnection(): Promise<void> {
     }
   );
 
-  // csak a warningok miatt: üres handlerek presence-hez
-  connection.on("UserOnline", (userId: string) => {
-    console.debug("[SignalR] UserOnline:", userId);
-  });
-  connection.on("useronline", (userId: string) => {
-    console.debug("[SignalR] useronline:", userId);
+  // initial online users
+  connection.on("InitialOnlineUsers", (userIds: string[]) => {
+    console.debug("[SignalR] InitialOnlineUsers:", userIds);
+    initialOnlineHandler?.(userIds);
   });
 
+  // user online/offline
+  connection.on("UserOnline", (userId: string) => {
+    console.debug("[SignalR] UserOnline:", userId);
+    userOnlineHandler?.(userId);
+  });
+
+  connection.on("UserOffline", (userId: string) => {
+    console.debug("[SignalR] UserOffline:", userId);
+    userOfflineHandler?.(userId);
+  });
+
+  // csak logoljuk a room join/leave-et
   connection.on(
     "UserJoinedRoom",
     (roomId: string, userId: string | null) => {
@@ -101,16 +120,21 @@ export async function startConnection(): Promise<void> {
     }
   );
   connection.on(
-    "userjoinedroom",
+    "UserLeftRoom",
     (roomId: string, userId: string | null) => {
-      console.debug("[SignalR] userjoinedroom:", roomId, userId);
+      console.debug("[SignalR] UserLeftRoom:", roomId, userId);
     }
   );
 
+  // start
   startPromise = connection
     .start()
     .then(() => {
       console.log("[SignalR] Connected to hub:", HUB_URL);
+    })
+    .catch((err) => {
+      console.error("[SignalR] Error while starting connection:", err);
+      throw err;
     })
     .finally(() => {
       startPromise = null;
@@ -130,6 +154,8 @@ export async function stopConnection(): Promise<void> {
     startPromise = null;
   }
 }
+
+// ---- Hub metódusok ----
 
 export async function registerUser(userId: string): Promise<void> {
   const conn = ensureConnectedOrWarn("registerUser");
@@ -174,10 +200,7 @@ export async function sendTyping(
   await conn.invoke("Typing", roomId, userId, isTyping);
 }
 
-// --- event handlerek regisztrálása a React app felől ---
-
-let messageHandler: ((msg: ChatMessageDto) => void) | null = null;
-let typingHandler: ((ev: TypingEvent) => void) | null = null;
+// ---- event handlerek regisztrálása a React app felől ----
 
 export function onMessageReceived(
   handler: (msg: ChatMessageDto) => void
@@ -185,8 +208,20 @@ export function onMessageReceived(
   messageHandler = handler;
 }
 
-export function onUserTyping(
-  handler: (ev: TypingEvent) => void
-): void {
+export function onUserTyping(handler: (ev: TypingEvent) => void): void {
   typingHandler = handler;
+}
+
+export function onInitialOnlineUsers(
+  handler: (userIds: string[]) => void
+): void {
+  initialOnlineHandler = handler;
+}
+
+export function onUserOnline(handler: (userId: string) => void): void {
+  userOnlineHandler = handler;
+}
+
+export function onUserOffline(handler: (userId: string) => void): void {
+  userOfflineHandler = handler;
 }

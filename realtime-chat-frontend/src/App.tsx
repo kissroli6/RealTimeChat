@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useEffect, useRef, useState } from "react";
 import {
   startConnection,
@@ -10,6 +9,9 @@ import {
   onMessageReceived,
   onUserTyping,
   sendTyping,
+  onInitialOnlineUsers,
+  onUserOnline,
+  onUserOffline,
   type ChatMessageDto,
   type TypingEvent,
 } from "./lib/signalrClient";
@@ -56,6 +58,11 @@ type CurrentUser = {
   displayName: string;
 };
 
+// User lista eleme, opcionális online státusszal
+type UserWithPresence = UserDto & {
+  isOnline?: boolean;
+};
+
 const LOCAL_STORAGE_USER_KEY = "rtc_current_user";
 
 function App() {
@@ -86,12 +93,62 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // User lista DM-hez
-  const [allUsers, setAllUsers] = useState<UserDto[]>([]);
+  // User lista DM-hez (online/offline státusszal)
+  const [allUsers, setAllUsers] = useState<UserWithPresence[]>([]);
+  // Online userek ID listája (Guid stringek)
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+
   const [isUserListOpen, setIsUserListOpen] = useState(false);
   const [userListError, setUserListError] = useState<string | null>(
     null
   );
+
+  // ======= PRESENCE HANDLEREK (előbb definiáljuk, hogy initForUser használhassa) =======
+
+  const handleInitialOnlineUsers = (userIds: string[]) => {
+    setOnlineUserIds(userIds);
+
+    // ha már be van töltve a felhasználó lista, frissítjük is
+    setAllUsers((prev) =>
+      prev.map((u) => {
+        const isOnline = userIds.some(
+          (id) => id.toLowerCase() === u.id.toLowerCase()
+        );
+        return { ...u, isOnline };
+      })
+    );
+  };
+
+  const handleUserOnline = (userId: string) => {
+    setOnlineUserIds((prev) => {
+      if (prev.some((id) => id.toLowerCase() === userId.toLowerCase())) {
+        return prev;
+      }
+      return [...prev, userId];
+    });
+
+    setAllUsers((prev) =>
+      prev.map((u) =>
+        u.id.toLowerCase() === userId.toLowerCase()
+          ? { ...u, isOnline: true }
+          : u
+      )
+    );
+  };
+
+  const handleUserOffline = (userId: string) => {
+    setOnlineUserIds((prev) =>
+      prev.filter((id) => id.toLowerCase() !== userId.toLowerCase())
+    );
+
+    setAllUsers((prev) =>
+      prev.map((u) =>
+        u.id.toLowerCase() === userId.toLowerCase()
+          ? { ...u, isOnline: false }
+          : u
+      )
+    );
+  };
 
   // --- SignalR + history + rooms init egy konkrét userrel ---
 
@@ -102,6 +159,7 @@ function App() {
     setRooms([]);
     setSelectedRoomId(null);
     selectedRoomRef.current = null;
+    setOnlineUserIds([]); // presence reset
 
     try {
       console.log("Starting SignalR connection...");
@@ -147,6 +205,11 @@ function App() {
           }
         });
       });
+
+      // 🔑 PRESENCE EVENTEKRE ITT IRATKOZUNK FEL, NEM A CALLBACKBEN
+      onInitialOnlineUsers(handleInitialOnlineUsers);
+      onUserOnline(handleUserOnline);
+      onUserOffline(handleUserOffline);
 
       // Szobák betöltése az adott usernek (public + DM)
       const roomsRes = await api.get<RoomForUserDto[]>(
@@ -265,6 +328,8 @@ function App() {
     setRooms([]);
     setSelectedRoomId(null);
     selectedRoomRef.current = null;
+    setOnlineUserIds([]);
+    setAllUsers([]);
   };
 
   // --- Szoba váltás ---
@@ -363,7 +428,15 @@ function App() {
     try {
       const users = await getAllUsers();
       const filtered = users.filter((u) => u.id !== currentUser.id);
-      setAllUsers(filtered);
+
+      const mapped: UserWithPresence[] = filtered.map((u) => {
+        const isOnline = onlineUserIds.some(
+          (id) => id.toLowerCase() === u.id.toLowerCase()
+        );
+        return { ...u, isOnline };
+      });
+
+      setAllUsers(mapped);
       setIsUserListOpen(true);
     } catch (err) {
       console.error("getAllUsers error:", err);
@@ -373,7 +446,7 @@ function App() {
   };
 
   // DM szoba létrehozása / megnyitása
-  const handleOpenDmWith = async (target: UserDto) => {
+  const handleOpenDmWith = async (target: UserWithPresence) => {
     if (!currentUser) return;
 
     try {
@@ -420,7 +493,6 @@ function App() {
       : activeRoom?.name ?? "Room";
 
   // --- LOGIN KÉPERNYŐ, ha nincs currentUser ---
-
   if (!currentUser) {
     return (
       <div
@@ -829,7 +901,47 @@ function App() {
                     fontSize: "14px",
                   }}
                 >
-                  <div>{u.displayName}</div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: "2px",
+                    }}
+                  >
+                    <span>{u.displayName}</span>
+                    {u.isOnline ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          fontSize: "12px",
+                          color: "#9FD633",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            backgroundColor: "#9FD633",
+                          }}
+                        />
+                        Online
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: "#777",
+                        }}
+                      >
+                        offline
+                      </span>
+                    )}
+                  </div>
                   <div
                     style={{
                       fontSize: "12px",

@@ -13,58 +13,108 @@ namespace RealTimeChat.Api.Hubs
         // connectionId -> userId
         private static readonly ConcurrentDictionary<string, Guid> _connections = new();
 
+        // userId -> aktív connection darabszám
+        private static readonly ConcurrentDictionary<Guid, int> _userConnectionCounts = new();
+
         public ChatHub(ChatDbContext context)
         {
             _context = context;
         }
 
-        // USER REGISZTRÁCIÓ / ONLINE PRESENCE
+        // ============================
+        // ✅ USER REGISZTRÁCIÓ / ONLINE
+        // ============================
         public async Task Register(Guid userId)
         {
             _connections[Context.ConnectionId] = userId;
 
-            await Clients.All.SendAsync("UserOnline", userId);
+            var connectionCount = _userConnectionCounts.AddOrUpdate(
+                userId,
+                1,
+                (_, current) => current + 1
+            );
+
+            // ✅ Csak akkor küldünk UserOnline-t,
+            // ha ez az ELSŐ aktív kapcsolata
+            if (connectionCount == 1)
+            {
+                await Clients.All.SendAsync("UserOnline", userId);
+            }
+
+            // ✅ A frissen belépő kliens megkapja,
+            // kik vannak már online
+            var onlineUserIds = _userConnectionCounts
+                .Where(x => x.Value > 0)
+                .Select(x => x.Key)
+                .ToList();
+
+            await Clients.Caller.SendAsync("InitialOnlineUsers", onlineUserIds);
         }
 
+        // ============================
+        // ✅ USER DISCONNECT / OFFLINE
+        // ============================
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             if (_connections.TryRemove(Context.ConnectionId, out var userId))
             {
-                await Clients.All.SendAsync("UserOffline", userId);
+                if (_userConnectionCounts.TryGetValue(userId, out var count))
+                {
+                    var newCount = count - 1;
+
+                    if (newCount <= 0)
+                    {
+                        _userConnectionCounts.TryRemove(userId, out _);
+
+                        // ✅ Csak akkor küldünk UserOffline-t,
+                        // ha az UTOLSÓ kapcsolata is megszűnt
+                        await Clients.All.SendAsync("UserOffline", userId);
+                    }
+                    else
+                    {
+                        _userConnectionCounts[userId] = newCount;
+                    }
+                }
             }
 
             await base.OnDisconnectedAsync(exception);
         }
 
+        // ============================
         // ROOM KEZELÉS
+        // ============================
         public async Task JoinRoom(Guid roomId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
+
             await Clients.Group(roomId.ToString())
-                .SendAsync("UserJoinedRoom", roomId, _connections.GetValueOrDefault(Context.ConnectionId));
+                .SendAsync("UserJoinedRoom",
+                    roomId,
+                    _connections.GetValueOrDefault(Context.ConnectionId));
         }
 
         public async Task LeaveRoom(Guid roomId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, roomId.ToString());
+
             await Clients.Group(roomId.ToString())
-                .SendAsync("UserLeftRoom", roomId, _connections.GetValueOrDefault(Context.ConnectionId));
+                .SendAsync("UserLeftRoom",
+                    roomId,
+                    _connections.GetValueOrDefault(Context.ConnectionId));
         }
 
-        // ÜZENETKÜLDÉS SZOBÁBA + MENTÉS DB-BE
+        // ============================
+        // ÜZENETKÜLDÉS + DB MENTÉS
+        // ============================
         public async Task SendMessageToRoom(Guid roomId, Guid senderId, string content)
         {
             var roomExists = await _context.ChatRooms.AnyAsync(r => r.Id == roomId);
             if (!roomExists)
-            {
                 throw new HubException("Room does not exist.");
-            }
 
             var userExists = await _context.Users.AnyAsync(u => u.Id == senderId);
             if (!userExists)
-            {
                 throw new HubException("Sender user does not exist.");
-            }
 
             var message = new ChatMessage
             {
@@ -77,7 +127,6 @@ namespace RealTimeChat.Api.Hubs
             _context.ChatMessages.Add(message);
             await _context.SaveChangesAsync();
 
-            // lekérjük a küldő display nevét
             var senderDisplayName = await _context.Users
                 .Where(u => u.Id == senderId)
                 .Select(u => u.DisplayName)
@@ -92,11 +141,11 @@ namespace RealTimeChat.Api.Hubs
                 message.SentAt,
                 DisplayName = senderDisplayName
             });
-
-
         }
 
+        // ============================
         // TYPING INDICATOR
+        // ============================
         public async Task Typing(Guid roomId, Guid userId, bool isTyping)
         {
             await Clients.Group(roomId.ToString())
