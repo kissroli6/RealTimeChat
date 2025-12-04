@@ -6,6 +6,7 @@ export type RoomForUserDto = {
   isPrivate: boolean;
   otherUserId?: string | null;
   otherDisplayName?: string | null;
+  // Ha a backend küldené, itt is felvehetnénk, de a UI-nak a ChatRoom a lényeg
 };
 
 export type ChatRoom = {
@@ -14,6 +15,10 @@ export type ChatRoom = {
   isPrivate: boolean;
   otherUserId?: string;
   otherDisplayName?: string;
+  // Új mezők a UI frissítéséhez:
+  lastMessage?: string;
+  lastMessageSender?: string;
+  isOnline?: boolean;
 };
 
 export type UiMessage = {

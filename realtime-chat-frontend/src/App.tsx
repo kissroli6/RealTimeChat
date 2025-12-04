@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { getUserByUserName } from "./api/users";
 import type { CurrentUser } from "./types";
-import { useChat } from "./hooks/useChat"; // A te fájlod neve useChat.ts!
+import { useChat } from "./hooks/useChat";
 
-// A te fájljaid nevei a components mappában (a képed alapján):
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
@@ -16,7 +15,6 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
 
-  // Itt hívjuk meg a useChat hookot, ami nálad létezik
   const chat = useChat(currentUser);
 
   // --- Auth Logic ---
@@ -59,29 +57,47 @@ function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#111", color: "#f5f5f5", display: "flex", justifyContent: "center", padding: "32px", fontFamily: "system-ui, sans-serif" }}>
-      <div style={{ maxWidth: "960px", width: "100%" }}>
+    // Fő konténer: Sötét háttér, középre igazítás, teljes képernyő
+    <div style={{ 
+      height: "100vh", 
+      width: "100vw",
+      // Figma stílusú háttér (sötét, kis lila/zöld beütéssel a sarkokban)
+      background: "linear-gradient(135deg, #1a1a2e 0%, #000000 50%, #0f1c0f 100%)",
+      color: "#f5f5f5", 
+      display: "flex", 
+      alignItems: "center", 
+      justifyContent: "center", 
+      fontFamily: "'Inter', system-ui, sans-serif",
+      overflow: "hidden" // Hogy ne legyen scrollbar a főablakon
+    }}>
+      
+      {/* Ez a belső konténer tartja a két "kártyát" (Sidebar + ChatArea) */}
+      <div style={{ 
+        width: "100%", 
+        maxWidth: "1200px", 
+        height: "90vh", // Hogy ne érjen teljesen a széléig
+        display: "flex", 
+        gap: "16px", // Távolság a Sidebar és a Chat között
+        padding: "0 20px"
+      }}>
         
-        {/* Header */}
-        <h1 style={{ fontSize: "32px", marginBottom: "8px" }}>Real-Time Chat</h1>
-        <p style={{ marginBottom: "16px", color: "#aaa" }}>
-          Bejelentkezve mint: <strong>{currentUser.displayName}</strong>
-          <button onClick={handleLogout} style={{ marginLeft: "12px", padding: "4px 10px", borderRadius: "999px", border: "none", backgroundColor: "#7C58DC", color: "#fff", cursor: "pointer", fontSize: "12px" }}>
-            Kijelentkezés
-          </button>
-        </p>
-
-        {/* Main Layout */}
-        <div style={{ display: "flex", gap: "24px" }}>
-          {/* A Sidebar komponenst használjuk a RoomsList helyett */}
-          <Sidebar 
+        {/* Sidebar Wrapper - Fix szélesség */}
+        <div style={{ width: "320px", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+           <Sidebar 
             rooms={chat.rooms} 
             selectedRoomId={chat.selectedRoomId} 
             onSelectRoom={chat.switchRoom} 
-            onOpenUserList={chat.openUserList} 
+            onOpenUserList={chat.openUserList}
+            // Ideiglenesen átadjuk a logoutot és a usernevet a Sidebar-nak, 
+            // mivel levettük őket a fő fejlécből. (A Sidebar interface-t majd bővítjük a köv. lépésben)
+            // @ts-ignore - Ezt a következő lépésben javítjuk a típusdefinícióban!
+            currentUser={currentUser}
+            onLogout={handleLogout}
           />
-          
-          {/* A ChatArea komponenst használjuk a ChatWindow helyett */}
+        </div>
+        
+        {/* Chat Area Wrapper - Kitölti a maradék helyet */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <ChatArea 
             activeRoom={chat.rooms.find(r => r.id === chat.selectedRoomId)}
             messages={chat.messages}
