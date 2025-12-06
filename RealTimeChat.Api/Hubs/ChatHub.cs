@@ -148,11 +148,23 @@ namespace RealTimeChat.Api.Hubs
         // ============================
         public async Task Typing(Guid roomId, Guid userId, bool isTyping)
         {
+            string? displayName = null;
+
+            // Ha elkezdett gépelni, lekérjük a nevét, hogy kiírhassuk
+            if (isTyping)
+            {
+                displayName = await _context.Users
+                    .Where(u => u.Id == userId)
+                    .Select(u => u.DisplayName)
+                    .FirstOrDefaultAsync();
+            }
+
             await Clients.Group(roomId.ToString())
                 .SendAsync("UserTyping", new
                 {
                     RoomId = roomId,
                     UserId = userId,
+                    DisplayName = displayName, // <--- ÚJ MEZŐ
                     IsTyping = isTyping
                 });
         }

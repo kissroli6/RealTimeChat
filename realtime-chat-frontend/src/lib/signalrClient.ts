@@ -18,6 +18,7 @@ export type ChatMessageDto = {
 export type TypingEvent = {
   roomId: string;
   userId: string;
+  displayName?: string; 
   isTyping: boolean;
 };
 
@@ -84,11 +85,12 @@ export async function startConnection(): Promise<void> {
   // typing event
   connection.on(
     "UserTyping",
-    (payload: { roomId: string; userId: string; isTyping: boolean }) => {
+    (payload: { roomId: string; userId: string; displayName?: string; isTyping: boolean }) => {
       if (typingHandler) {
         typingHandler({
           roomId: payload.roomId,
           userId: payload.userId,
+          displayName: payload.displayName, // <--- Átadjuk a nevet is
           isTyping: payload.isTyping,
         });
       }

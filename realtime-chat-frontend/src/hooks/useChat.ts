@@ -30,12 +30,20 @@ import type {
   UserListMode 
 } from "../types";
 
+// ÚJ: Segédtípus a gépelő felhasználó adatainak
+export type TypingUser = {
+  userId: string;
+  displayName: string;
+};
+
 export function useChat(currentUser: CurrentUser | null) {
   // --- State ---
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  
+  // MÓDOSÍTÁS: Most már objektumokat tárolunk (ID + Név)
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   
   // Presence state
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
@@ -142,14 +150,29 @@ export function useChat(currentUser: CurrentUser | null) {
         });
       });
 
+      // MÓDOSÍTÁS: Itt kezeljük a nevek mentését
       onUserTyping((ev: TypingEvent) => {
         const currentRoomId = selectedRoomRef.current;
         if (!currentRoomId || ev.roomId.toLowerCase() !== currentRoomId.toLowerCase()) return;
+        
+        // Saját magunkat nem írjuk ki
         if (ev.userId.toLowerCase() === user.id.toLowerCase()) return;
+
         setTypingUsers((prev) => {
-            const exists = prev.includes(ev.userId);
-            if (ev.isTyping) return exists ? prev : [...prev, ev.userId];
-            return prev.filter((id) => id !== ev.userId);
+            if (ev.isTyping) {
+                // Ha már benne van, nem adjuk hozzá újra
+                const exists = prev.some(u => u.userId === ev.userId);
+                if (exists) return prev;
+                
+                // Hozzáadjuk a nevet is
+                return [...prev, { 
+                    userId: ev.userId, 
+                    displayName: ev.displayName || "Valaki" 
+                }];
+            } else {
+                // Eltávolítjuk
+                return prev.filter((u) => u.userId !== ev.userId);
+            }
         });
       });
 
@@ -233,7 +256,7 @@ export function useChat(currentUser: CurrentUser | null) {
     if (selectedRoomId) {
        try { await leaveRoom(selectedRoomId); } catch (e) { console.warn(e); }
     }
-    setTypingUsers([]);
+    setTypingUsers([]); // Fontos: szobaváltáskor töröljük a gépelőket
     await handleRoomJoin(roomId, currentUser);
   };
 
@@ -318,21 +341,16 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
-  // --- CSOPORT LÉTREHOZÁSA ---
-  // A UI (UserListModal) hívja meg ezt a függvényt a kiválasztott adatokkal.
   const createGroup = async (name: string, userIds: string[]) => {
     if (!currentUser) return;
     
-    // LOGIKA: 
-    // Ha 'GROUP' módban nyitottuk a listát -> Privát csoport (isPrivate: true)
-    // Ha 'PUBLIC' módban nyitottuk a listát -> Publikus szoba (isPrivate: false)
     const isPrivateGroup = userListMode === 'GROUP'; 
 
     try {
         const res = await api.post<RoomForUserDto>("/api/rooms/group", {
             name: name,
             userIds: [currentUser.id, ...userIds],
-            isPrivate: isPrivateGroup // <-- Itt történik a csoda
+            isPrivate: isPrivateGroup
         });
 
         const r = res.data;
@@ -360,7 +378,7 @@ export function useChat(currentUser: CurrentUser | null) {
     rooms,
     selectedRoomId,
     messages,
-    typingUsers,
+    typingUsers, // Ez most már {userId, displayName} tömb
     isInitializing,
     switchRoom,
     sendMessage,

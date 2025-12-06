@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import type { ChatRoom, UiMessage } from "../types";
 
+// Importáljuk vagy definiáljuk újra a típust, hogy illeszkedjen a hook-hoz
+type TypingUser = {
+  userId: string;
+  displayName: string;
+};
+
 interface ChatAreaProps {
   activeRoom: ChatRoom | undefined;
   messages: UiMessage[];
-  typingUsers: string[];
+  typingUsers: TypingUser[]; // <--- MÓDOSÍTVA: objektum tömb
   onSendMessage: (msg: string) => void;
   onTyping: (val: string) => void;
 }
@@ -13,7 +19,7 @@ export function ChatArea({ activeRoom, messages, typingUsers, onSendMessage, onT
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Automatikus görgetés az aljára új üzenetnél
+  // Automatikus görgetés az aljára új üzenetnél vagy gépelésnél
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUsers]);
@@ -36,8 +42,25 @@ export function ChatArea({ activeRoom, messages, typingUsers, onSendMessage, onT
     ? (activeRoom.isPrivate && activeRoom.otherDisplayName ? activeRoom.otherDisplayName : activeRoom.name)
     : "Válassz egy szobát";
 
-  // Ha privát a szoba, megnézzük az online státuszt (feltételezve, hogy a típusban benne van)
   const isOnline = activeRoom?.isPrivate && (activeRoom as any).isOnline;
+
+  // --- LOGIKA: Gépelési szöveg generálása ---
+  const getTypingText = () => {
+    if (typingUsers.length === 0) return null;
+
+    // Kinyerjük a neveket (itt dönthetsz: teljes név vagy csak keresztnév)
+    // Most a teljes nevet használjuk a példában:
+    const names = typingUsers.map(u => u.displayName); 
+    // Ha csak keresztnevet akarnál: u.displayName.split(" ")[0]
+
+    if (names.length === 1) {
+      return `${names[0]} éppen gépel...`;
+    } else if (names.length === 2) {
+      return `${names[0]} és ${names[1]} éppen gépelnek...`;
+    } else {
+      return `${names.slice(0, 2).join(", ")} és további ${names.length - 2} ember gépel...`;
+    }
+  };
 
   if (!activeRoom) {
     return (
@@ -76,7 +99,6 @@ export function ChatArea({ activeRoom, messages, typingUsers, onSendMessage, onT
         gap: "12px",
         backgroundColor: "#1a1a1a"
       }}>
-        {/* Nagyobb Avatar a fejlécben */}
         <div style={{ 
           width: "42px", height: "42px", 
           borderRadius: "50%", 
@@ -120,18 +142,16 @@ export function ChatArea({ activeRoom, messages, typingUsers, onSendMessage, onT
               alignSelf: m.isOwn ? "flex-end" : "flex-start"
             }}
           >
-            {/* Név kiírása, ha nem saját üzenet */}
             {!m.isOwn && (
               <span style={{ fontSize: "11px", color: "#777", marginLeft: "12px", marginBottom: "4px" }}>
                 {m.displayName || "Ismeretlen"}
               </span>
             )}
 
-            {/* Üzenet buborék */}
             <div style={{ 
               padding: "12px 16px", 
-              borderRadius: m.isOwn ? "18px 18px 0 18px" : "18px 18px 18px 0", // Sarkok kerekítése
-              backgroundColor: m.isOwn ? "#7C58DC" : "#2a2a2a", // Lila vs Szürke
+              borderRadius: m.isOwn ? "18px 18px 0 18px" : "18px 18px 18px 0",
+              backgroundColor: m.isOwn ? "#7C58DC" : "#2a2a2a",
               color: "#f5f5f5",
               fontSize: "15px",
               lineHeight: "1.4",
@@ -140,26 +160,26 @@ export function ChatArea({ activeRoom, messages, typingUsers, onSendMessage, onT
             }}>
               {m.content}
             </div>
-            
-            {/* Időbélyeg (opcionális, ha van 'createdAt' a messageben) */}
-            {/* <span style={{ fontSize: "10px", color: "#555", marginTop: "2px", marginRight: m.isOwn ? "4px" : "0", marginLeft: !m.isOwn ? "4px" : "0" }}>10:42</span> */}
           </div>
         ))}
-        
-        {/* Üres div a görgetéshez */}
         <div ref={messagesEndRef} />
       </div>
 
       {/* --- TYPING INDICATOR & INPUT --- */}
       <div style={{ padding: "0 20px 20px 20px" }}>
         
-        {/* Gépelés jelző */}
-        <div style={{ minHeight: "20px", marginBottom: "8px", fontSize: "12px", color: "#777", paddingLeft: "16px" }}>
-          {typingUsers.length > 0 && (
-            <span style={{ fontStyle: "italic" }}>
-              {typingUsers.length === 1 ? "Valaki éppen gépel..." : `${typingUsers.length} ember éppen gépel...`}
-            </span>
-          )}
+        {/* Gépelés jelző - DINAMIKUS NÉV KIÍRÁS */}
+        <div style={{ 
+            minHeight: "20px", 
+            marginBottom: "8px", 
+            fontSize: "12px", 
+            color: "#9FD633", // Zöldes szín a figyelemfelkeltéshez
+            paddingLeft: "16px",
+            fontStyle: "italic",
+            opacity: typingUsers.length > 0 ? 1 : 0, // Csak akkor látszik, ha van gépelő
+            transition: "opacity 0.2s"
+        }}>
+          {getTypingText()}
         </div>
 
         {/* Input Sáv */}
