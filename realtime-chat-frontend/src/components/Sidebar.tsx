@@ -1,11 +1,12 @@
 import { useState } from "react";
-import type { ChatRoom, CurrentUser } from "../types";
+import type { ChatRoom, CurrentUser, UserListMode } from "../types";
 
 interface SidebarProps {
   rooms: ChatRoom[];
   selectedRoomId: string | null;
   onSelectRoom: (id: string) => void;
-  onOpenUserList: () => void;
+  // Módosult: most már várjuk a módot (DM vagy GROUP)
+  onOpenUserList: (mode: UserListMode) => void;
   currentUser: CurrentUser | null;
   onLogout: () => void;
 }
@@ -18,7 +19,7 @@ export function Sidebar({
   currentUser, 
   onLogout 
 }: SidebarProps) {
-  const [activeTab, setActiveTab] = useState<'DM' | 'GROUP'>('DM');
+  const [activeTab, setActiveTab] = useState<UserListMode>('DM');
 
   const filteredRooms = rooms.filter(room => {
     if (activeTab === 'DM') return room.isPrivate;
@@ -47,10 +48,10 @@ export function Sidebar({
           RealTimeChat
         </h2>
         
-        {/* Plusz Gomb - Javított Ikonnal */}
+        {/* Plusz Gomb - Most már átadja az aktív fület */}
         <button
-          onClick={onOpenUserList}
-          title="Új beszélgetés indítása"
+          onClick={() => onOpenUserList(activeTab)}
+          title={activeTab === 'DM' ? "Új privát üzenet" : "Új csoport létrehozása"}
           style={{
             background: "#2a2a2a",
             border: "1px solid #333",
@@ -62,10 +63,9 @@ export function Sidebar({
             justifyContent: "center",
             cursor: "pointer",
             transition: "all 0.2s",
-            padding: 0 // Fontos, hogy ne nyomja el az ikont
+            padding: 0
           }}
         >
-          {/* Stabilabb SVG Plusz Ikon - Direkt Fehér Színnel */}
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 5V19M5 12H19" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
