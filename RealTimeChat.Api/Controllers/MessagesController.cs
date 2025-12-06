@@ -46,13 +46,6 @@ namespace RealTimeChat.Api.Controllers
             messages.Reverse();
 
             return messages;
-
-
-
-            // fordítás: régi → új sorrend
-            messages.Reverse();
-
-            return messages;
         }
     }
 }

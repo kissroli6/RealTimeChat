@@ -39,13 +39,11 @@ export type UserWithPresence = UserDto & {
   isOnline?: boolean;
 };
 
-// --- ÚJ TÍPUSOK ---
+export type UserListMode = 'DM' | 'GROUP' | 'PUBLIC';
 
-// A modális ablak módja: vagy privát üzenet választó, vagy csoport készítő
-export type UserListMode = 'DM' | 'GROUP';
-
-// Csoport létrehozásához szükséges adatok (API hívás payload)
+// MÓDOSÍTÁS: Hozzáadtuk az isPrivate mezőt
 export type CreateGroupDto = {
     name: string;
     userIds: string[];
+    isPrivate: boolean;
 };

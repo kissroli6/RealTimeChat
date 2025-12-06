@@ -27,7 +27,7 @@ import type {
   UiMessage, 
   CurrentUser, 
   UserWithPresence,
-  UserListMode // Importáljuk az új típust
+  UserListMode 
 } from "../types";
 
 export function useChat(currentUser: CurrentUser | null) {
@@ -45,7 +45,7 @@ export function useChat(currentUser: CurrentUser | null) {
   const [isInitializing, setIsInitializing] = useState(false);
   const [isUserListOpen, setIsUserListOpen] = useState(false);
   
-  // ÚJ STATE: Tároljuk, hogy milyen módban nyitottuk meg a modált
+  // State a modal módjának tárolására
   const [userListMode, setUserListMode] = useState<UserListMode>('DM');
   const [userListError, setUserListError] = useState<string | null>(null);
 
@@ -266,11 +266,10 @@ export function useChat(currentUser: CurrentUser | null) {
      } catch(err) { console.warn(err); }
   };
 
-  // Módosítva: Most már várjuk a módot (mode)
   const openUserList = async (mode: UserListMode) => {
     if (!currentUser) return;
     setUserListError(null);
-    setUserListMode(mode); // Beállítjuk a módot
+    setUserListMode(mode); 
     try {
       const users = await getAllUsers();
       const filtered = users.filter((u) => u.id !== currentUser.id);
@@ -319,24 +318,29 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
-  // --- ÚJ FUNKCIÓ: Csoport létrehozása ---
+  // --- CSOPORT LÉTREHOZÁSA ---
+  // A UI (UserListModal) hívja meg ezt a függvényt a kiválasztott adatokkal.
   const createGroup = async (name: string, userIds: string[]) => {
     if (!currentUser) return;
+    
+    // LOGIKA: 
+    // Ha 'GROUP' módban nyitottuk a listát -> Privát csoport (isPrivate: true)
+    // Ha 'PUBLIC' módban nyitottuk a listát -> Publikus szoba (isPrivate: false)
+    const isPrivateGroup = userListMode === 'GROUP'; 
+
     try {
-        // Feltételezve, hogy van egy ilyen végpont. Ha nincs, a backendet is módosítani kell.
-        // Általában POST /api/rooms a csoportok létrehozására
         const res = await api.post<RoomForUserDto>("/api/rooms/group", {
             name: name,
-            userIds: [currentUser.id, ...userIds] // A saját ID-t is hozzáadjuk, vagy a backend kezeli
+            userIds: [currentUser.id, ...userIds],
+            isPrivate: isPrivateGroup // <-- Itt történik a csoda
         });
 
         const r = res.data;
         
-        // Új csoport objektum létrehozása
         const groupRoom: ChatRoom = {
             id: r.id,
             name: r.name,
-            isPrivate: false, // Csoport -> publikus/nem privát
+            isPrivate: r.isPrivate,
             lastMessage: "A csoport létrejött",
             lastMessageSender: "Rendszer",
             isOnline: false 
@@ -366,8 +370,8 @@ export function useChat(currentUser: CurrentUser | null) {
     userListError,
     allUsers,
     openUserList,
-    userListMode, // Ezt is visszaadjuk
+    userListMode,
     startDm,
-    createGroup // Ezt is visszaadjuk
+    createGroup
   };
 }
