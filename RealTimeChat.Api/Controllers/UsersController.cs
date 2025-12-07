@@ -22,24 +22,35 @@ namespace RealTimeChat.Api.Controllers
             public string DisplayName { get; set; } = default!;
         }
 
+        // POST: api/users -> Új felhasználó regisztrálása
         [HttpPost]
         public async Task<ActionResult<User>> CreateUser([FromBody] CreateUserRequest request)
         {
+            // 1. Validáció
+            if (string.IsNullOrWhiteSpace(request.UserName) || string.IsNullOrWhiteSpace(request.DisplayName))
+            {
+                return BadRequest("Minden mező kitöltése kötelező.");
+            }
+
+            // 2. Duplikáció ellenőrzés
             var exists = await _context.Users.AnyAsync(u => u.UserName == request.UserName);
             if (exists)
             {
-                return Conflict("A megadott UserName már létezik.");
+                return Conflict("Ez a felhasználónév (ID) már foglalt. Válassz másikat.");
             }
 
+            // 3. Létrehozás
             var user = new User
             {
+                Id = Guid.NewGuid(),
                 UserName = request.UserName,
-                DisplayName = request.DisplayName
+                DisplayName = request.DisplayName,
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            // 4. Visszatérés a létrehozott objektummal (fontos az azonnali belépéshez)
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
         }
 
@@ -51,7 +62,6 @@ namespace RealTimeChat.Api.Controllers
             return user;
         }
 
-        // ⬇⬇⬇ ÚJ: keresés usernév alapján bejelentkezéshez
         [HttpGet("by-username/{userName}")]
         public async Task<ActionResult<User>> GetByUserName(string userName)
         {
@@ -65,7 +75,7 @@ namespace RealTimeChat.Api.Controllers
 
             return user;
         }
-        // GET: api/users   → felhasználók listája (DM listához)
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<User>>> GetAllUsers()
         {
@@ -75,6 +85,5 @@ namespace RealTimeChat.Api.Controllers
 
             return users;
         }
-
     }
 }

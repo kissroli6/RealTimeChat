@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { getUserByUserName } from "./api/users";
+// Importáljuk a szükséges API hívásokat (createUser hozzáadva!)
+import { getUserByUserName, createUser } from "./api/users";
 import type { CurrentUser } from "./types";
 import { useChat } from "./hooks/useChat";
 
@@ -15,10 +16,10 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
 
+  // A hook inicializálása
   const chat = useChat(currentUser);
 
-  // --- Auth Logic ---
-  
+  // --- Auth Logic (Bejelentkezés ellenőrzése induláskor) ---
   useEffect(() => {
     const stored = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
     if (stored) {
@@ -30,6 +31,7 @@ function App() {
     }
   }, []);
 
+  // BEJELENTKEZÉS
   const handleLogin = async (userName: string) => {
     setLoginError(null);
     setIsLoginLoading(true);
@@ -39,7 +41,32 @@ function App() {
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
       setCurrentUser(user);
     } catch (err: any) {
-      setLoginError(err?.response?.status === 404 ? "Nincs ilyen felhasználó." : "Hiba történt.");
+      // Ha 404, akkor nincs ilyen user
+      setLoginError(err?.response?.status === 404 ? "Nincs ilyen felhasználó. Regisztrálj!" : "Hiba történt.");
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  // ✅ ÚJ: REGISZTRÁCIÓ
+  const handleRegister = async (userName: string, displayName: string) => {
+    setLoginError(null);
+    setIsLoginLoading(true);
+    try {
+      // 1. Létrehozzuk a felhasználót a backend-en
+      const dto = await createUser(userName, displayName);
+      
+      // 2. Azonnal be is léptetjük (elmentjük lokálisan)
+      const user: CurrentUser = { id: dto.id, userName: dto.userName, displayName: dto.displayName };
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+      setCurrentUser(user);
+    } catch (err: any) {
+        // Ha 409 Conflict, akkor már van ilyen név
+        if (err?.response?.status === 409) {
+            setLoginError("Ez a felhasználónév már foglalt. Válassz másikat!");
+        } else {
+            setLoginError("Hiba történt a regisztráció során.");
+        }
     } finally {
       setIsLoginLoading(false);
     }
@@ -52,10 +79,19 @@ function App() {
 
   // --- Render ---
 
+  // Ha nincs bejelentkezve, akkor a LoginScreen-t mutatjuk
   if (!currentUser) {
-    return <LoginScreen onLogin={handleLogin} isLoading={isLoginLoading} error={loginError} />;
+    return (
+        <LoginScreen 
+            onLogin={handleLogin} 
+            onRegister={handleRegister} // <--- EZ HIÁNYZOTT AZ ELŐBB!
+            isLoading={isLoginLoading} 
+            error={loginError} 
+        />
+    );
   }
 
+  // Ha be van jelentkezve, akkor a fő alkalmazást
   return (
     <div style={{ 
       height: "100vh", 
@@ -99,7 +135,7 @@ function App() {
             onSendMessage={chat.sendMessage}
             onTyping={chat.handleInputTyping}
             
-            // Props bekötése
+            // Props bekötése az admin funkciókhoz
             currentUserId={currentUser.id} 
             allUsers={chat.allUsers}       
             onAddMember={chat.addMemberToGroup}      
@@ -107,7 +143,7 @@ function App() {
           />
         </div>
 
-        {/* UserListModal - Itt adjuk át a currentUser-t */}
+        {/* UserListModal - Modal ablak új beszélgetésekhez */}
         <UserListModal 
           isOpen={chat.isUserListOpen}
           onClose={() => chat.setIsUserListOpen(false)}
@@ -116,7 +152,7 @@ function App() {
           onSelectUser={chat.startDm}
           onCreateGroup={chat.createGroup}
           error={chat.userListError}
-          currentUser={currentUser} // <--- EZT ADTUK HOZZÁ
+          currentUser={currentUser} 
         />
       </div>
     </div>
