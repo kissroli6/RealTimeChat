@@ -1,4 +1,3 @@
-// src/lib/signalrClient.ts
 import {
   HubConnection,
   HubConnectionBuilder,
@@ -27,8 +26,6 @@ const HUB_URL = "https://localhost:7274/hubs/chat";
 let connection: HubConnection | null = null;
 let startPromise: Promise<void> | null = null;
 
-// ---- helper: biztos Connected state ----
-
 function ensureConnectedOrWarn(op: string): HubConnection | null {
   if (!connection) {
     console.warn(`[SignalR] ${op} called but connection is null.`);
@@ -45,23 +42,16 @@ function ensureConnectedOrWarn(op: string): HubConnection | null {
   return connection;
 }
 
-// ---- kliens oldali callbackek ----
-
 let messageHandler: ((msg: ChatMessageDto) => void) | null = null;
 let typingHandler: ((ev: TypingEvent) => void) | null = null;
 let initialOnlineHandler: ((userIds: string[]) => void) | null = null;
 let userOnlineHandler: ((userId: string) => void) | null = null;
 let userOfflineHandler: ((userId: string) => void) | null = null;
 
-// ---- kapcsolat indítása ----
-
 export async function startConnection(): Promise<void> {
-  // már van Connected kapcsolat
   if (connection && connection.state === HubConnectionState.Connected) {
     return;
   }
-
-  // már folyamatban van a start()
   if (startPromise) {
     await startPromise;
     return;
@@ -74,15 +64,12 @@ export async function startConnection(): Promise<void> {
     .configureLogging(LogLevel.Information)
     .withAutomaticReconnect()
     .build();
-
-  // üzenet fogadás
   connection.on("ReceiveMessage", (msg: ChatMessageDto) => {
     if (messageHandler) {
       messageHandler(msg);
     }
   });
 
-  // typing event
   connection.on(
     "UserTyping",
     (payload: { roomId: string; userId: string; displayName?: string; isTyping: boolean }) => {
@@ -97,13 +84,11 @@ export async function startConnection(): Promise<void> {
     }
   );
 
-  // initial online users
   connection.on("InitialOnlineUsers", (userIds: string[]) => {
     console.debug("[SignalR] InitialOnlineUsers:", userIds);
     initialOnlineHandler?.(userIds);
   });
 
-  // user online/offline
   connection.on("UserOnline", (userId: string) => {
     console.debug("[SignalR] UserOnline:", userId);
     userOnlineHandler?.(userId);
@@ -114,7 +99,6 @@ export async function startConnection(): Promise<void> {
     userOfflineHandler?.(userId);
   });
 
-  // csak logoljuk a room join/leave-et
   connection.on(
     "UserJoinedRoom",
     (roomId: string, userId: string | null) => {
@@ -128,7 +112,6 @@ export async function startConnection(): Promise<void> {
     }
   );
 
-  // start
   startPromise = connection
     .start()
     .then(() => {
@@ -156,8 +139,6 @@ export async function stopConnection(): Promise<void> {
     startPromise = null;
   }
 }
-
-// ---- Hub metódusok ----
 
 export async function registerUser(userId: string): Promise<void> {
   const conn = ensureConnectedOrWarn("registerUser");
@@ -201,8 +182,6 @@ export async function sendTyping(
 
   await conn.invoke("Typing", roomId, userId, isTyping);
 }
-
-// ---- event handlerek regisztrálása a React app felől ----
 
 export function onMessageReceived(
   handler: (msg: ChatMessageDto) => void

@@ -22,7 +22,6 @@ namespace RealTimeChat.Api.Controllers
             public string DisplayName { get; set; } = default!;
         }
 
-        // POST: api/users -> Új felhasználó regisztrálása
         [HttpPost]
         public async Task<ActionResult<User>> CreateUser([FromBody] CreateUserRequest request)
         {

@@ -1,15 +1,11 @@
 import { useState, useEffect } from "react";
-// Importáljuk a szükséges API hívásokat (createUser hozzáadva!)
 import { getUserByUserName, createUser } from "./api/users";
 import type { CurrentUser } from "./types";
 import { useChat } from "./hooks/useChat";
-
 import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { UserListModal } from "./components/UserListModal";
-
-// FONTOS: Itt importáljuk az új CSS-t, ami a layoutot és a stílusokat kezeli
 import "./App.css"; 
 
 const LOCAL_STORAGE_USER_KEY = "rtc_current_user";
@@ -18,11 +14,8 @@ function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
-
-  // A hook inicializálása (mindig meghívódik, de csak akkor aktív, ha van currentUser)
   const chat = useChat(currentUser);
 
-  // --- Auth Logic (Bejelentkezés ellenőrzése induláskor) ---
   useEffect(() => {
     const stored = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
     if (stored) {
@@ -34,7 +27,6 @@ function App() {
     }
   }, []);
 
-  // BEJELENTKEZÉS (Létező felhasználó)
   const handleLogin = async (userName: string) => {
     setLoginError(null);
     setIsLoginLoading(true);
@@ -44,27 +36,21 @@ function App() {
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
       setCurrentUser(user);
     } catch (err: any) {
-      // Ha 404, akkor nincs ilyen user
       setLoginError(err?.response?.status === 404 ? "Nincs ilyen felhasználó. Regisztrálj!" : "Hiba történt.");
     } finally {
       setIsLoginLoading(false);
     }
   };
 
-  // REGISZTRÁCIÓ (Új felhasználó)
   const handleRegister = async (userName: string, displayName: string) => {
     setLoginError(null);
     setIsLoginLoading(true);
     try {
-      // 1. Létrehozzuk a felhasználót a backend-en
       const dto = await createUser(userName, displayName);
-      
-      // 2. Azonnal be is léptetjük (elmentjük lokálisan)
       const user: CurrentUser = { id: dto.id, userName: dto.userName, displayName: dto.displayName };
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
       setCurrentUser(user);
     } catch (err: any) {
-        // Ha 409 Conflict, akkor már van ilyen név
         if (err?.response?.status === 409) {
             setLoginError("Ez a felhasználónév már foglalt. Válassz másikat!");
         } else {
@@ -80,9 +66,6 @@ function App() {
     setCurrentUser(null);
   };
 
-  // --- Render ---
-
-  // 1. Ha nincs bejelentkezve, akkor a LoginScreen-t mutatjuk (középre igazítva a CSS által)
   if (!currentUser) {
     return (
         <LoginScreen 
@@ -94,10 +77,9 @@ function App() {
     );
   }
 
-  // 2. Ha be van jelentkezve, akkor a fő alkalmazást
   return (
-    <div className="app-container"> {/* KÜLSŐ KERET: Ez igazítja középre az egészet */}
-        <div className="app-layout"> {/* BELSŐ DOBOZ: Ez a fix szélességű chat felület */}
+    <div className="app-container"> 
+        <div className="app-layout"> 
            
            <div className="sidebar-wrapper">
               <Sidebar 
@@ -117,7 +99,6 @@ function App() {
                 typingUsers={chat.typingUsers}
                 onSendMessage={chat.sendMessage}
                 onTyping={chat.handleInputTyping}
-                // Props bekötése az admin funkciókhoz
                 currentUserId={currentUser.id} 
                 allUsers={chat.allUsers}       
                 onAddMember={chat.addMemberToGroup}      
@@ -125,7 +106,6 @@ function App() {
               />
            </div>
 
-           {/* Modális ablak (mindig renderelődik, de csak akkor látszik, ha isOpen=true) */}
            <UserListModal 
               isOpen={chat.isUserListOpen}
               onClose={() => chat.setIsUserListOpen(false)}

@@ -30,29 +30,23 @@ export function UserListModal({
   const isGroup = mode === 'GROUP';
   const isDm = mode === 'DM';
   const showNameInput = isGroup || isPublic;
-
-  // --- SZŰRÉS ÉS RENDEZÉS LOGIKA ---
   const visibleUsers = useMemo(() => {
-    // 1. Alap lista másolata
     let filtered = [...users];
 
-    // 2. Ha DM mód van, KIVESSZÜK magunkat a listából
     if (isDm) {
         filtered = filtered.filter(u => u.id !== currentUser.id);
     }
 
-    // 3. Rendezés (Csoportnál magunkat előre, amúgy névsor)
     return filtered.sort((a, b) => {
       if (a.id === currentUser.id) return -1;
       if (b.id === currentUser.id) return 1;
       return a.displayName.localeCompare(b.displayName);
     });
-  }, [users, currentUser.id, isDm]); // Függőségek: ha a mód változik, újra számol
+  }, [users, currentUser.id, isDm]);
 
   useEffect(() => {
     if (isOpen) {
       setGroupName("");
-      // Csak csoportnál jelöljük ki magunkat
       if (isGroup && currentUser) {
           setSelectedUserIds([currentUser.id]);
       } else {
@@ -97,14 +91,10 @@ export function UserListModal({
   return (
     <div className="modal-overlay">
       <div className="modal-card">
-        
-        {/* HEADER */}
         <div className="modal-header">
           <h3 className="modal-title">{getTitle()}</h3>
           <button onClick={onClose} className="modal-close">✕</button>
         </div>
-
-        {/* INPUT */}
         {showNameInput && (
           <div style={{ padding: "24px 24px 0 24px" }}>
             <label className="modal-section-label" style={{padding: 0, marginBottom: "8px"}}>SZOBA NEVE</label>
@@ -121,7 +111,6 @@ export function UserListModal({
 
         {error && <div className="error-banner" style={{ margin: "16px 24px 0 24px" }}>{error}</div>}
 
-        {/* LISTA */}
         {isPublic ? (
           <div style={{ padding: "32px 24px", textAlign: "center", color: "#888" }}>
             <div style={{ width: "60px", height: "60px", margin: "0 auto 16px auto", borderRadius: "50%", backgroundColor: "#2a2a2a", display: "flex", alignItems: "center", justifyContent: "center", color: "#A1DD29" }}>
@@ -138,7 +127,6 @@ export function UserListModal({
             </div>
 
             <div className="modal-body custom-scroll">
-              {/* ITT MOST MÁR A SZŰRT LISTÁT (visibleUsers) HASZNÁLJUK */}
               {visibleUsers.map((u) => {
                 const initial = u.displayName.charAt(0).toUpperCase();
                 const isMe = isGroup && u.id === currentUser.id;

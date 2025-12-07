@@ -13,8 +13,6 @@ namespace RealTimeChat.Api.Data
         public DbSet<User> Users => Set<User>();
         public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
         public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
-
-        // ÚJ TÁBLA
         public DbSet<RoomParticipant> RoomParticipants => Set<RoomParticipant>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -54,13 +52,13 @@ namespace RealTimeChat.Api.Data
             // 2. Kapcsolat a szobával
             modelBuilder.Entity<RoomParticipant>()
                 .HasOne(rp => rp.Room)
-                .WithMany(r => r.Participants) // Ez most már létezik a ChatRoom-ban!
+                .WithMany(r => r.Participants)
                 .HasForeignKey(rp => rp.RoomId);
 
             // 3. Kapcsolat a felhasználóval
             modelBuilder.Entity<RoomParticipant>()
                 .HasOne(rp => rp.User)
-                .WithMany() // A User modellben nem kötelező listát tartani a szobákról, ha nem akarunk
+                .WithMany()
                 .HasForeignKey(rp => rp.UserId);
         }
     }

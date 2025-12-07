@@ -86,11 +86,7 @@ export function ChatArea({
 
   return (
     <div className="chat-container">
-      
-      {/* BAL OLDAL (CHAT) */}
       <div className="chat-main">
-          
-          {/* HEADER */}
           <div className="chat-header">
             <div className="header-info">
                 <div className="header-avatar">
@@ -116,8 +112,6 @@ export function ChatArea({
                 </button>
             )}
           </div>
-
-          {/* ÜZENETEK */}
           <div className="messages-list">
             {messages.map((m) => (
               <div key={m.id} className={`message-item ${m.isOwn ? 'own' : 'other'}`}>
@@ -129,8 +123,6 @@ export function ChatArea({
             ))}
             <div ref={messagesEndRef} />
           </div>
-
-          {/* INPUT */}
           <div className="input-area">
             <div className="typing-indicator" style={{ opacity: typingUsers.length > 0 ? 1 : 0 }}>
               {getTypingText()}
@@ -148,8 +140,6 @@ export function ChatArea({
             </div>
           </div>
       </div>
-
-      {/* JOBB OLDAL (ADMIN) */}
       {isPrivateGroup && showPanel && (
           <ChatAdminPanel 
             activeRoom={activeRoom}

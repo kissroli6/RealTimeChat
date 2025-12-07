@@ -41,10 +41,7 @@ namespace RealTimeChat.Api.Controllers
         DisplayName = m.Sender.DisplayName
     })
     .ToListAsync();
-
-            // régi -> új sorrend
             messages.Reverse();
-
             return messages;
         }
     }

@@ -29,7 +29,6 @@ import type {
   UserListMode 
 } from "../types";
 
-// Frissített ChatRoom típus (bekerült a participantIds)
 export type ChatRoom = {
   id: string;
   name: string;
@@ -39,7 +38,7 @@ export type ChatRoom = {
   lastMessage?: string;
   lastMessageSender?: string;
   isOnline?: boolean;
-  participantIds?: string[]; // ÚJ MEZŐ
+  participantIds?: string[];
 };
 
 export type TypingUser = {
@@ -170,8 +169,6 @@ export function useChat(currentUser: CurrentUser | null) {
       onUserOffline(handleUserOffline);
 
       const roomsRes = await api.get<RoomForUserDto[]>(`/api/rooms/for-user/${user.id}`);
-      
-      // Betöltjük az összes felhasználót is, hogy a neveket tudjuk párosítani az ID-khoz
       const usersRes = await getAllUsers();
       setAllUsers(usersRes);
 
@@ -240,7 +237,6 @@ export function useChat(currentUser: CurrentUser | null) {
     return () => {
       if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]); 
 
   const switchRoom = async (roomId: string) => {
@@ -261,7 +257,7 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
-  const handleInputTyping = (value: string) => {
+  const handleInputTyping = () => {
     if (!currentUser || !selectedRoomId) return;
     if (!isTypingRef.current) {
       isTypingRef.current = true;
@@ -285,7 +281,6 @@ export function useChat(currentUser: CurrentUser | null) {
     if (!currentUser) return;
     setUserListError(null);
     setUserListMode(mode); 
-    // Ha már be vannak töltve a userek az init-nél, nem kell újra
     if (allUsers.length === 0) {
         try {
           const users = await getAllUsers();
@@ -357,13 +352,10 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
-  // --- ÚJ ADMIN FUNKCIÓK ---
-
   const addMemberToGroup = async (roomId: string, userId: string) => {
     if (!currentUser) return;
     try {
         await api.post("/api/rooms/add-member", { roomId, userId });
-        // Frissítjük a helyi állapotot
         setRooms(prev => prev.map(r => {
             if (r.id === roomId) {
                 return { ...r, participantIds: [...(r.participantIds || []), userId] };
@@ -379,7 +371,6 @@ export function useChat(currentUser: CurrentUser | null) {
     if (!currentUser) return;
     try {
         await api.post("/api/rooms/remove-member", { roomId, userId });
-        // Frissítjük a helyi állapotot
         setRooms(prev => prev.map(r => {
             if (r.id === roomId) {
                 return { ...r, participantIds: (r.participantIds || []).filter(id => id !== userId) };
@@ -408,7 +399,7 @@ export function useChat(currentUser: CurrentUser | null) {
     userListMode,
     startDm,
     createGroup,
-    addMemberToGroup, // exportáljuk
-    removeMemberFromGroup // exportáljuk
+    addMemberToGroup,
+    removeMemberFromGroup
   };
 }

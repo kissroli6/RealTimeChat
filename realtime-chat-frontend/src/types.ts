@@ -43,7 +43,6 @@ export type UserWithPresence = UserDto & {
 
 export type UserListMode = 'DM' | 'GROUP' | 'PUBLIC';
 
-// MÓDOSÍTÁS: Hozzáadtuk az isPrivate mezőt
 export type CreateGroupDto = {
     name: string;
     userIds: string[];

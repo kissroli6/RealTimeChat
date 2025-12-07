@@ -29,8 +29,6 @@ export function Sidebar({
 
   return (
     <div className="sidebar">
-      
-      {/* HEADER */}
       <div className="sidebar-header">
         <h2 className="app-name">RealTimeChat</h2>
         <button
@@ -44,8 +42,6 @@ export function Sidebar({
           </svg>
         </button>
       </div>
-
-      {/* TABS */}
       <div className="sidebar-tabs">
         <div className="tabs-container">
           {(['DM', 'GROUP', 'PUBLIC'] as UserListMode[]).map((tab) => (
@@ -59,8 +55,6 @@ export function Sidebar({
           ))}
         </div>
       </div>
-
-      {/* LISTA */}
       <div className="room-list">
         {filteredRooms.map((room) => {
           const label = room.isPrivate && room.otherDisplayName ? room.otherDisplayName : room.name;
@@ -98,8 +92,6 @@ export function Sidebar({
           </div>
         )}
       </div>
-
-      {/* FOOTER */}
       <div className="sidebar-footer">
         <div className="user-mini">
           <div className="my-avatar">

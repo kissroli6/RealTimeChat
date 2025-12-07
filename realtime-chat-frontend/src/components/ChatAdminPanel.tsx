@@ -39,20 +39,16 @@ export function ChatAdminPanel({
 
     return (
         <div className="admin-panel">
-            {/* FEJLÉC */}
             <div className="admin-header">
                 <h3 className="admin-title">Csoport kezelése</h3>
                 <button onClick={onClose} className="close-btn" title="Bezárás">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             </div>
-
-            {/* TAG HOZZÁADÁSA */}
             <div style={{ marginBottom: "24px" }}>
                 <label className="admin-label">Új tag felvétele</label>
                 
                 <div className="admin-card">
-                    {/* DROPDOWN */}
                     <div style={{ position: "relative" }}>
                         <div 
                             className={`dropdown-trigger ${isDropdownOpen ? 'active' : ''}`}
@@ -108,8 +104,6 @@ export function ChatAdminPanel({
                     </button>
                 </div>
             </div>
-
-            {/* TAGOK LISTÁJA */}
             <div className="custom-scroll" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
                 <label className="admin-label">Jelenlegi tagok ({currentMembers.length})</label>
                 

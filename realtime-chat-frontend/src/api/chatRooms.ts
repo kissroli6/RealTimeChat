@@ -1,4 +1,3 @@
-// src/api/chatRooms.ts
 import { api } from "./client";
 
 export type ChatRoomDto = {
@@ -10,7 +9,6 @@ export type ChatRoomDto = {
   createdAt?: string;
 };
 
-// Direkt (DM) szobák lekérése egy userhez
 export async function getDirectRoomsForUser(
   userId: string
 ): Promise<ChatRoomDto[]> {
@@ -20,7 +18,6 @@ export async function getDirectRoomsForUser(
   return res.data;
 }
 
-// Direkt (DM) szoba létrehozása két user között
 export async function createDirectRoom(
   userAId: string,
   userBId: string

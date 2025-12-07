@@ -21,9 +21,6 @@ namespace RealTimeChat.Api.Hubs
             _context = context;
         }
 
-        // ============================
-        // ✅ USER REGISZTRÁCIÓ / ONLINE
-        // ============================
         public async Task Register(Guid userId)
         {
             _connections[Context.ConnectionId] = userId;
@@ -34,15 +31,11 @@ namespace RealTimeChat.Api.Hubs
                 (_, current) => current + 1
             );
 
-            // ✅ Csak akkor küldünk UserOnline-t,
-            // ha ez az ELSŐ aktív kapcsolata
             if (connectionCount == 1)
             {
                 await Clients.All.SendAsync("UserOnline", userId);
             }
 
-            // ✅ A frissen belépő kliens megkapja,
-            // kik vannak már online
             var onlineUserIds = _userConnectionCounts
                 .Where(x => x.Value > 0)
                 .Select(x => x.Key)
@@ -51,9 +44,6 @@ namespace RealTimeChat.Api.Hubs
             await Clients.Caller.SendAsync("InitialOnlineUsers", onlineUserIds);
         }
 
-        // ============================
-        // ✅ USER DISCONNECT / OFFLINE
-        // ============================
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             if (_connections.TryRemove(Context.ConnectionId, out var userId))
@@ -66,8 +56,6 @@ namespace RealTimeChat.Api.Hubs
                     {
                         _userConnectionCounts.TryRemove(userId, out _);
 
-                        // ✅ Csak akkor küldünk UserOffline-t,
-                        // ha az UTOLSÓ kapcsolata is megszűnt
                         await Clients.All.SendAsync("UserOffline", userId);
                     }
                     else
@@ -80,9 +68,6 @@ namespace RealTimeChat.Api.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
-        // ============================
-        // ROOM KEZELÉS
-        // ============================
         public async Task JoinRoom(Guid roomId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
@@ -103,9 +88,6 @@ namespace RealTimeChat.Api.Hubs
                     _connections.GetValueOrDefault(Context.ConnectionId));
         }
 
-        // ============================
-        // ÜZENETKÜLDÉS + DB MENTÉS
-        // ============================
         public async Task SendMessageToRoom(Guid roomId, Guid senderId, string content)
         {
             var roomExists = await _context.ChatRooms.AnyAsync(r => r.Id == roomId);
@@ -143,14 +125,10 @@ namespace RealTimeChat.Api.Hubs
             });
         }
 
-        // ============================
-        // TYPING INDICATOR
-        // ============================
         public async Task Typing(Guid roomId, Guid userId, bool isTyping)
         {
             string? displayName = null;
 
-            // Ha elkezdett gépelni, lekérjük a nevét, hogy kiírhassuk
             if (isTyping)
             {
                 displayName = await _context.Users
@@ -164,7 +142,7 @@ namespace RealTimeChat.Api.Hubs
                 {
                     RoomId = roomId,
                     UserId = userId,
-                    DisplayName = displayName, // <--- ÚJ MEZŐ
+                    DisplayName = displayName,
                     IsTyping = isTyping
                 });
         }

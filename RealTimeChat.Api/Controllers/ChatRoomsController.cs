@@ -96,11 +96,9 @@ namespace RealTimeChat.Api.Controllers
             return publicRooms.Concat(privateGroups).Concat(dmDtos).ToList();
         }
 
-        // ✅ EZ A VÉGPONT HIÁNYZOTT (DM INDÍTÁS):
         [HttpPost("direct")]
         public async Task<ActionResult<RoomForUserDto>> CreateDirectMessage([FromQuery] Guid userId, [FromQuery] Guid targetUserId)
         {
-            // 1. Megnézzük, létezik-e már közös privát szoba (A-B vagy B-A variációban)
             var existingRoom = await _context.ChatRooms
                 .Where(r => r.IsPrivate &&
                             ((r.UserAId == userId && r.UserBId == targetUserId) ||
@@ -111,7 +109,6 @@ namespace RealTimeChat.Api.Controllers
 
             if (existingRoom != null)
             {
-                // Ha van, visszaadjuk azt
                 var otherUser = existingRoom.UserAId == userId ? existingRoom.UserB : existingRoom.UserA;
                 return Ok(new RoomForUserDto
                 {
@@ -123,11 +120,10 @@ namespace RealTimeChat.Api.Controllers
                 });
             }
 
-            // 2. Ha nincs, létrehozunk egy újat
             var newRoom = new ChatRoom
             {
                 Id = Guid.NewGuid(),
-                Name = "DM", // Privátnál nem számít a név
+                Name = "DM",
                 IsPrivate = true,
                 UserAId = userId,
                 UserBId = targetUserId
@@ -136,7 +132,6 @@ namespace RealTimeChat.Api.Controllers
             _context.ChatRooms.Add(newRoom);
             await _context.SaveChangesAsync();
 
-            // Vissza kell adnunk a DTO-t, hogy a frontend azonnal meg tudja nyitni
             var targetUser = await _context.Users.FindAsync(targetUserId);
 
             return Ok(new RoomForUserDto
