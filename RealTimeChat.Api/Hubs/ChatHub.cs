@@ -25,6 +25,8 @@ namespace RealTimeChat.Api.Hubs
         {
             _connections[Context.ConnectionId] = userId;
 
+            await Groups.AddToGroupAsync(Context.ConnectionId, userId.ToString());
+
             var connectionCount = _userConnectionCounts.AddOrUpdate(
                 userId,
                 1,
@@ -55,7 +57,6 @@ namespace RealTimeChat.Api.Hubs
                     if (newCount <= 0)
                     {
                         _userConnectionCounts.TryRemove(userId, out _);
-
                         await Clients.All.SendAsync("UserOffline", userId);
                     }
                     else

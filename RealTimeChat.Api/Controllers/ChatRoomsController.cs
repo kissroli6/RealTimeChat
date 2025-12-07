@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using RealTimeChat.Api.Data;
+using RealTimeChat.Api.Hubs;
 using RealTimeChat.Api.Models;
 
 namespace RealTimeChat.Api.Controllers
@@ -10,10 +12,12 @@ namespace RealTimeChat.Api.Controllers
     public class ChatRoomsController : ControllerBase
     {
         private readonly ChatDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public ChatRoomsController(ChatDbContext context)
+        public ChatRoomsController(ChatDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         public class RoomForUserDto
@@ -132,16 +136,37 @@ namespace RealTimeChat.Api.Controllers
             _context.ChatRooms.Add(newRoom);
             await _context.SaveChangesAsync();
 
-            var targetUser = await _context.Users.FindAsync(targetUserId);
+            var userA = await _context.Users.FindAsync(userId);
+            var userB = await _context.Users.FindAsync(targetUserId);
 
-            return Ok(new RoomForUserDto
+            var responseDto = new RoomForUserDto
             {
                 Id = newRoom.Id,
                 Name = newRoom.Name,
                 IsPrivate = true,
-                OtherUserId = targetUser?.Id,
-                OtherDisplayName = targetUser?.DisplayName
+                OtherUserId = userB?.Id,
+                OtherDisplayName = userB?.DisplayName
+            };
+
+            await _hubContext.Clients.Group(userId.ToString()).SendAsync("RoomCreated", new RoomForUserDto
+            {
+                Id = newRoom.Id,
+                Name = newRoom.Name,
+                IsPrivate = true,
+                OtherUserId = userB?.Id,
+                OtherDisplayName = userB?.DisplayName
             });
+
+            await _hubContext.Clients.Group(targetUserId.ToString()).SendAsync("RoomCreated", new RoomForUserDto
+            {
+                Id = newRoom.Id,
+                Name = newRoom.Name,
+                IsPrivate = true,
+                OtherUserId = userA?.Id,
+                OtherDisplayName = userA?.DisplayName
+            });
+
+            return Ok(responseDto);
         }
 
         [HttpPost("group")]
@@ -156,10 +181,10 @@ namespace RealTimeChat.Api.Controllers
                 IsPrivate = request.IsPrivate
             };
 
-            if (request.IsPrivate && request.UserIds.Any())
-            {
-                var uniqueUserIds = request.UserIds.Distinct().ToList();
+            var uniqueUserIds = request.UserIds.Distinct().ToList();
 
+            if (request.IsPrivate && uniqueUserIds.Any())
+            {
                 foreach (var uid in uniqueUserIds)
                 {
                     newRoom.Participants.Add(new RoomParticipant
@@ -173,13 +198,27 @@ namespace RealTimeChat.Api.Controllers
             _context.ChatRooms.Add(newRoom);
             await _context.SaveChangesAsync();
 
-            return Ok(new RoomForUserDto
+            var responseDto = new RoomForUserDto
             {
                 Id = newRoom.Id,
                 Name = newRoom.Name,
                 IsPrivate = newRoom.IsPrivate,
-                ParticipantIds = request.UserIds
-            });
+                ParticipantIds = uniqueUserIds
+            };
+
+            if (request.IsPrivate)
+            {
+                foreach (var uid in uniqueUserIds)
+                {
+                    await _hubContext.Clients.Group(uid.ToString()).SendAsync("RoomCreated", responseDto);
+                }
+            }
+            else
+            {
+                await _hubContext.Clients.All.SendAsync("RoomCreated", responseDto);
+            }
+
+            return Ok(responseDto);
         }
 
         [HttpPost("add-member")]
@@ -194,6 +233,15 @@ namespace RealTimeChat.Api.Controllers
 
             room.Participants.Add(new RoomParticipant { RoomId = request.RoomId, UserId = request.UserId });
             await _context.SaveChangesAsync();
+
+            var roomDto = new RoomForUserDto
+            {
+                Id = room.Id,
+                Name = room.Name,
+                IsPrivate = true,
+                ParticipantIds = room.Participants.Select(p => p.UserId).ToList()
+            };
+            await _hubContext.Clients.Group(request.UserId.ToString()).SendAsync("RoomCreated", roomDto);
 
             return Ok();
         }

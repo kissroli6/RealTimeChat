@@ -12,9 +12,11 @@ import {
   onInitialOnlineUsers,
   onUserOnline,
   onUserOffline,
+  onRoomCreated,
   stopConnection,
   type ChatMessageDto,
   type TypingEvent,
+  type RoomCreatedDto,
 } from "../lib/signalrClient";
 
 import { api } from "../api/client";
@@ -115,6 +117,33 @@ export function useChat(currentUser: CurrentUser | null) {
     setRooms((prevRooms) => updateRoomsWithPresence(prevRooms, newIds));
   };
 
+  const handleRoomCreated = (roomDto: RoomCreatedDto) => {
+    setRooms((prev) => {
+      if (prev.some((r) => r.id === roomDto.id)) return prev;
+
+      const newRoom: ChatRoom = {
+        id: roomDto.id,
+        name: roomDto.name,
+        isPrivate: roomDto.isPrivate,
+        otherUserId: roomDto.otherUserId,
+        otherDisplayName: roomDto.otherDisplayName,
+        participantIds: roomDto.participantIds,
+        isOnline: false,
+        lastMessage: undefined,
+        lastMessageSender: undefined
+      };
+
+      if (newRoom.isPrivate && newRoom.otherUserId) {
+         const isPartnerOnline = onlineUsersRef.current.some(
+            id => id.toLowerCase() === newRoom.otherUserId!.toLowerCase()
+         );
+         newRoom.isOnline = isPartnerOnline;
+      }
+
+      return [newRoom, ...prev];
+    });
+  };
+
   const initForUser = async (user: CurrentUser) => {
     setIsInitializing(true);
     setMessages([]);
@@ -167,6 +196,7 @@ export function useChat(currentUser: CurrentUser | null) {
       onInitialOnlineUsers(handleInitialOnlineUsers);
       onUserOnline(handleUserOnline);
       onUserOffline(handleUserOffline);
+      onRoomCreated(handleRoomCreated);
 
       const roomsRes = await api.get<RoomForUserDto[]>(`/api/rooms/for-user/${user.id}`);
       const usersRes = await getAllUsers();
@@ -266,7 +296,7 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
-  const handleInputTyping = () => {
+  const handleInputTyping = (_: string) => {
     if (!currentUser || !selectedRoomId) return;
     if (!isTypingRef.current) {
       isTypingRef.current = true;

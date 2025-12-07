@@ -21,6 +21,15 @@ export type TypingEvent = {
   isTyping: boolean;
 };
 
+export type RoomCreatedDto = {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+  otherUserId?: string;
+  otherDisplayName?: string;
+  participantIds?: string[];
+};
+
 const HUB_URL = "https://localhost:7274/hubs/chat";
 
 let connection: HubConnection | null = null;
@@ -47,6 +56,7 @@ let typingHandler: ((ev: TypingEvent) => void) | null = null;
 let initialOnlineHandler: ((userIds: string[]) => void) | null = null;
 let userOnlineHandler: ((userId: string) => void) | null = null;
 let userOfflineHandler: ((userId: string) => void) | null = null;
+let roomCreatedHandler: ((room: RoomCreatedDto) => void) | null = null;
 
 export async function startConnection(): Promise<void> {
   if (connection && connection.state === HubConnectionState.Connected) {
@@ -57,13 +67,12 @@ export async function startConnection(): Promise<void> {
     return;
   }
 
-  console.log("Starting SignalR connection...");
-
   connection = new HubConnectionBuilder()
     .withUrl(HUB_URL)
     .configureLogging(LogLevel.Information)
     .withAutomaticReconnect()
     .build();
+
   connection.on("ReceiveMessage", (msg: ChatMessageDto) => {
     if (messageHandler) {
       messageHandler(msg);
@@ -77,7 +86,7 @@ export async function startConnection(): Promise<void> {
         typingHandler({
           roomId: payload.roomId,
           userId: payload.userId,
-          displayName: payload.displayName, // <--- Átadjuk a nevet is
+          displayName: payload.displayName,
           isTyping: payload.isTyping,
         });
       }
@@ -85,38 +94,25 @@ export async function startConnection(): Promise<void> {
   );
 
   connection.on("InitialOnlineUsers", (userIds: string[]) => {
-    console.debug("[SignalR] InitialOnlineUsers:", userIds);
     initialOnlineHandler?.(userIds);
   });
 
   connection.on("UserOnline", (userId: string) => {
-    console.debug("[SignalR] UserOnline:", userId);
     userOnlineHandler?.(userId);
   });
 
   connection.on("UserOffline", (userId: string) => {
-    console.debug("[SignalR] UserOffline:", userId);
     userOfflineHandler?.(userId);
   });
 
-  connection.on(
-    "UserJoinedRoom",
-    (roomId: string, userId: string | null) => {
-      console.debug("[SignalR] UserJoinedRoom:", roomId, userId);
+  connection.on("RoomCreated", (room: RoomCreatedDto) => {
+    if (roomCreatedHandler) {
+      roomCreatedHandler(room);
     }
-  );
-  connection.on(
-    "UserLeftRoom",
-    (roomId: string, userId: string | null) => {
-      console.debug("[SignalR] UserLeftRoom:", roomId, userId);
-    }
-  );
+  });
 
   startPromise = connection
     .start()
-    .then(() => {
-      console.log("[SignalR] Connected to hub:", HUB_URL);
-    })
     .catch((err) => {
       console.error("[SignalR] Error while starting connection:", err);
       throw err;
@@ -205,4 +201,8 @@ export function onUserOnline(handler: (userId: string) => void): void {
 
 export function onUserOffline(handler: (userId: string) => void): void {
   userOfflineHandler = handler;
+}
+
+export function onRoomCreated(handler: (room: RoomCreatedDto) => void): void {
+  roomCreatedHandler = handler;
 }
