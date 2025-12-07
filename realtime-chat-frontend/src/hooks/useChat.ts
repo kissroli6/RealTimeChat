@@ -70,6 +70,7 @@ export function useChat(currentUser: CurrentUser | null) {
     selectedRoomRef.current = selectedRoomId;
   }, [selectedRoomId]);
 
+  // Segédfüggvény: Szobák online státuszának frissítése
   const updateRoomsWithPresence = (currentRooms: ChatRoom[], onlineIds: string[]) => {
     return currentRooms.map((room) => {
       if (room.isPrivate && room.otherUserId) {
@@ -84,12 +85,17 @@ export function useChat(currentUser: CurrentUser | null) {
     });
   };
 
+  // --- SIGNALR HANDLERS ---
+
   const handleInitialOnlineUsers = (userIds: string[]) => {
     onlineUsersRef.current = userIds;
     setOnlineUserIds(userIds);
+    
+    // Frissítjük a meglévő user listát (ha már be van töltve)
     setAllUsers((prev) =>
       prev.map((u) => ({ ...u, isOnline: userIds.some((id) => id.toLowerCase() === u.id.toLowerCase()) }))
     );
+    // Frissítjük a szobákat
     setRooms((prevRooms) => updateRoomsWithPresence(prevRooms, userIds));
   };
 
@@ -99,6 +105,7 @@ export function useChat(currentUser: CurrentUser | null) {
         const newIds = [...currentIds, userId];
         onlineUsersRef.current = newIds;
         setOnlineUserIds(newIds);
+        
         setAllUsers((prev) =>
             prev.map((u) => (u.id.toLowerCase() === userId.toLowerCase() ? { ...u, isOnline: true } : u))
         );
@@ -111,6 +118,7 @@ export function useChat(currentUser: CurrentUser | null) {
     const newIds = currentIds.filter(id => id.toLowerCase() !== userId.toLowerCase());
     onlineUsersRef.current = newIds;
     setOnlineUserIds(newIds);
+    
     setAllUsers((prev) =>
       prev.map((u) => (u.id.toLowerCase() === userId.toLowerCase() ? { ...u, isOnline: false } : u))
     );
@@ -143,6 +151,8 @@ export function useChat(currentUser: CurrentUser | null) {
       return [newRoom, ...prev];
     });
   };
+
+  // --- INIT ---
 
   const initForUser = async (user: CurrentUser) => {
     setIsInitializing(true);
@@ -198,9 +208,17 @@ export function useChat(currentUser: CurrentUser | null) {
       onUserOffline(handleUserOffline);
       onRoomCreated(handleRoomCreated);
 
+      // ADATBETÖLTÉS
       const roomsRes = await api.get<RoomForUserDto[]>(`/api/rooms/for-user/${user.id}`);
       const usersRes = await getAllUsers();
-      setAllUsers(usersRes);
+
+      // ✅ JAVÍTÁS: Itt fésüljük össze az online listát az API-ból jött userekkel!
+      // Így ha a SignalR már megjött, nem írjuk felül "offline"-ra a usereket.
+      const usersWithPresence = usersRes.map(u => ({
+          ...u,
+          isOnline: onlineUsersRef.current.some(oid => oid.toLowerCase() === u.id.toLowerCase())
+      }));
+      setAllUsers(usersWithPresence);
 
       let mappedRooms: ChatRoom[] = roomsRes.data.map((r) => ({
         id: r.id,
@@ -296,6 +314,7 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
+  // ✅ JAVÍTÁS: Az unused 'value' warning eltüntetése
   const handleInputTyping = (_: string) => {
     if (!currentUser || !selectedRoomId) return;
     if (!isTypingRef.current) {
@@ -323,7 +342,12 @@ export function useChat(currentUser: CurrentUser | null) {
     if (allUsers.length === 0) {
         try {
           const users = await getAllUsers();
-          setAllUsers(users);
+          // Itt is összefésüljük a biztonság kedvéért, ha esetleg újranyitják
+          const usersWithPresence = users.map(u => ({
+              ...u,
+              isOnline: onlineUsersRef.current.some(oid => oid.toLowerCase() === u.id.toLowerCase())
+          }));
+          setAllUsers(usersWithPresence);
         } catch (err) {
           setUserListError("Nem sikerült betölteni a felhasználókat.");
         }
