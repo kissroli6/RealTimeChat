@@ -184,7 +184,7 @@ export function useChat(currentUser: CurrentUser | null) {
         lastMessage: undefined,
         lastMessageSender: undefined,
         isOnline: false,
-        participantIds: r.ParticipantIds ?? [] // Adatbázisból jövő résztvevők
+        participantIds: (r as any).ParticipantIds ?? r.participantIds ?? []
       }));
 
       const roomsWithMessages = await Promise.all(
@@ -346,7 +346,7 @@ export function useChat(currentUser: CurrentUser | null) {
             lastMessage: "A csoport létrejött",
             lastMessageSender: "Rendszer",
             isOnline: false,
-            participantIds: r.ParticipantIds
+            participantIds: (r as any).ParticipantIds ?? r.participantIds ?? []
         };
         setRooms((prev) => [groupRoom, ...prev]);
         setIsUserListOpen(false);

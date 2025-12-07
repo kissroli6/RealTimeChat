@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import type { ChatRoom, UiMessage } from "../types";
+import { ChatAdminPanel } from "./ChatAdminPanel"; // IMPORTÁLJUK AZ ÚJ KOMPONENST
 
 type TypingUser = {
   userId: string;
@@ -36,7 +37,7 @@ export function ChatArea({
 }: ChatAreaProps) {
     
   const [input, setInput] = useState("");
-  const [selectedUserToAdd, setSelectedUserToAdd] = useState("");
+  // A panel nyitottságát itt tároljuk, mert a gomb a Headerben van
   const [showPanel, setShowPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -44,9 +45,9 @@ export function ChatArea({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typingUsers]);
 
+  // Ha szobát váltunk, panel bezárása
   useEffect(() => {
     setShowPanel(false);
-    setSelectedUserToAdd("");
   }, [activeRoom?.id]);
 
   const handleSend = () => {
@@ -77,16 +78,6 @@ export function ChatArea({
     return `${names.slice(0, 2).join(", ")} és további ${names.length - 2} ember gépel...`;
   };
 
-  const handleAddUser = () => {
-      if (!selectedUserToAdd || !activeRoom) return;
-      onAddMember(activeRoom.id, selectedUserToAdd);
-      setSelectedUserToAdd(""); 
-  };
-
-  const participants = activeRoom?.participantIds || [];
-  const availableUsersToAdd = allUsers.filter(u => !participants.includes(u.id));
-  const currentMembers = allUsers.filter(u => participants.includes(u.id));
-
   if (!activeRoom) {
     return (
       <div style={{ height: "100%", backgroundColor: "#161616", borderRadius: "24px", border: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "center", color: "#555" }}>
@@ -102,11 +93,11 @@ export function ChatArea({
       borderRadius: "24px", 
       border: "1px solid #333",
       display: "flex", 
-      flexDirection: "row", 
+      flexDirection: "row", // Egymás mellett legyen a Chat és az Admin
       overflow: "hidden"
     }}>
       
-      {/* BAL OLDAL (Chat) */}
+      {/* --- BAL OLDAL (CHAT) --- */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           
           {/* HEADER */}
@@ -118,7 +109,6 @@ export function ChatArea({
               justifyContent: "space-between",
               backgroundColor: "#1a1a1a"
           }}>
-            {/* Bal oldali rész */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <div style={{ width: "42px", height: "42px", borderRadius: "50%", backgroundColor: "#7C58DC", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", color: "#fff", fontSize: "18px" }}>
                   {activeRoomLabel.charAt(0).toUpperCase()}
@@ -129,27 +119,24 @@ export function ChatArea({
                 </div>
             </div>
 
-            {/* ✅ JOBB OLDALI GOMB: Három pont, keret nélkül */}
-            {/* ✅ VÉGLEGES GOMB: Sidebar stílus + Fehér 3 pont */}
+            {/* Admin Panel Toggle Gomb */}
             {isPrivateGroup && (
                 <button 
                     onClick={() => setShowPanel(!showPanel)}
                     title={showPanel ? "Panel elrejtése" : "Csoport kezelése"}
                     style={{
-                        // Ugyanaz a stílus, mint a Sidebar "+" gombjánál
-                        background: showPanel ? "#444" : "#2a2a2a", // Sötétszürke háttér
-                        border: "1px solid #333",                   // Halvány keret
-                        borderRadius: "50%",                        // Tökéletes kör
-                        width: "40px", height: "40px",              // Fix méret
+                        background: showPanel ? "#444" : "#2a2a2a", 
+                        border: "1px solid #333",                   
+                        borderRadius: "50%",                        
+                        width: "40px", height: "40px",              
                         display: "flex", alignItems: "center", justifyContent: "center",
                         cursor: "pointer",
                         transition: "all 0.2s",
-                        padding: 0 // Fontos, hogy ne torzuljon
+                        padding: 0
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.borderColor = "#777"}
                     onMouseLeave={(e) => e.currentTarget.style.borderColor = "#333"}
                 >
-                    {/* SVG: Direkt fehér színnel (#f5f5f5), hogy biztosan látsszon */}
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="12" cy="12" r="2" fill="#f5f5f5"/>
                         <circle cx="12" cy="6" r="2" fill="#f5f5f5"/>
@@ -184,85 +171,18 @@ export function ChatArea({
           </div>
       </div>
 
-      {/* JOBB OLDAL: ADMIN PANEL */}
+      {/* --- JOBB OLDAL (ADMIN KOMPONENS) --- */}
       {isPrivateGroup && showPanel && (
-          <div style={{ 
-              width: "260px", 
-              borderLeft: "1px solid #222", 
-              backgroundColor: "#111", 
-              display: "flex", 
-              flexDirection: "column",
-              padding: "20px",
-              animation: "fadeIn 0.2s ease-in-out"
-          }}>
-              <style>{`
-                @keyframes fadeIn {
-                  from { opacity: 0; transform: translateX(10px); }
-                  to { opacity: 1; transform: translateX(0); }
-                }
-              `}</style>
-              
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #333", paddingBottom: "10px", marginBottom: "20px" }}>
-                <h3 style={{ margin: 0, fontSize: "16px", color: "#ddd" }}>
-                    Csoport kezelése
-                </h3>
-                <button onClick={() => setShowPanel(false)} style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer" }}>✕</button>
-              </div>
-
-              <div style={{ marginBottom: "24px" }}>
-                  <label style={{ fontSize: "11px", color: "#777", fontWeight: "bold", display: "block", marginBottom: "8px" }}>TAG HOZZÁADÁSA</label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <select 
-                        value={selectedUserToAdd}
-                        onChange={(e) => setSelectedUserToAdd(e.target.value)}
-                        style={{ padding: "8px", borderRadius: "8px", backgroundColor: "#222", border: "1px solid #333", color: "#fff", outline: "none" }}
-                      >
-                          <option value="">Válassz...</option>
-                          {availableUsersToAdd.map(u => (
-                              <option key={u.id} value={u.id}>{u.displayName}</option>
-                          ))}
-                      </select>
-                      <button 
-                        onClick={handleAddUser}
-                        disabled={!selectedUserToAdd}
-                        style={{ padding: "8px", borderRadius: "8px", backgroundColor: selectedUserToAdd ? "#444" : "#222", color: "#fff", border: "none", cursor: selectedUserToAdd ? "pointer" : "default" }}
-                      >
-                          Hozzáadás
-                      </button>
-                  </div>
-              </div>
-
-              <div style={{ flex: 1, overflowY: "auto" }}>
-                  <label style={{ fontSize: "11px", color: "#777", fontWeight: "bold", display: "block", marginBottom: "8px" }}>JELENLEGI TAGOK ({currentMembers.length})</label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      {currentMembers.map(member => (
-                          <div key={member.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px", backgroundColor: "#1a1a1a", borderRadius: "8px" }}>
-                              <span style={{ fontSize: "13px", color: "#eee", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {member.displayName} {member.id === currentUserId && "(Te)"}
-                              </span>
-                              
-                              {member.id !== currentUserId && (
-                                  <button 
-                                    onClick={() => onRemoveMember(activeRoom.id, member.id)}
-                                    title="Eltávolítás a csoportból"
-                                    style={{ 
-                                        backgroundColor: "transparent", 
-                                        border: "none", 
-                                        color: "#ff6b6b", 
-                                        cursor: "pointer", 
-                                        fontWeight: "bold",
-                                        padding: "4px 8px"
-                                    }}
-                                  >
-                                      ✕
-                                  </button>
-                              )}
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          </div>
+          <ChatAdminPanel 
+            activeRoom={activeRoom}
+            currentUserId={currentUserId}
+            allUsers={allUsers}
+            onAddMember={onAddMember}
+            onRemoveMember={onRemoveMember}
+            onClose={() => setShowPanel(false)}
+          />
       )}
+
     </div>
   );
 }

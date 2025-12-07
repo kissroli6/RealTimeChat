@@ -84,7 +84,7 @@ function App() {
             rooms={chat.rooms} 
             selectedRoomId={chat.selectedRoomId} 
             onSelectRoom={chat.switchRoom} 
-            onOpenUserList={chat.openUserList} // Most már átveszi a módot
+            onOpenUserList={chat.openUserList}
             currentUser={currentUser}
             onLogout={handleLogout}
           />
@@ -99,23 +99,24 @@ function App() {
             onSendMessage={chat.sendMessage}
             onTyping={chat.handleInputTyping}
             
-            // ✅ ÚJ PROPOK BEKÖTÉSE:
-            currentUserId={currentUser.id} // Átadjuk a saját ID-nkat
-            allUsers={chat.allUsers}       // Átadjuk az összes felhasználót (a listázáshoz)
-            onAddMember={chat.addMemberToGroup}      // Hozzáadás funkció
-            onRemoveMember={chat.removeMemberFromGroup} // Törlés funkció
+            // Props bekötése
+            currentUserId={currentUser.id} 
+            allUsers={chat.allUsers}       
+            onAddMember={chat.addMemberToGroup}      
+            onRemoveMember={chat.removeMemberFromGroup} 
           />
         </div>
 
-        {/* UserListModal - Frissítve az új funkciókkal */}
+        {/* UserListModal - Itt adjuk át a currentUser-t */}
         <UserListModal 
           isOpen={chat.isUserListOpen}
           onClose={() => chat.setIsUserListOpen(false)}
           users={chat.allUsers}
-          mode={chat.userListMode} // Átadjuk a módot (DM vagy GROUP)
-          onSelectUser={chat.startDm} // DM callback
-          onCreateGroup={chat.createGroup} // Group callback
+          mode={chat.userListMode}
+          onSelectUser={chat.startDm}
+          onCreateGroup={chat.createGroup}
           error={chat.userListError}
+          currentUser={currentUser} // <--- EZT ADTUK HOZZÁ
         />
       </div>
     </div>
