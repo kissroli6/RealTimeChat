@@ -49,7 +49,6 @@ namespace RealTimeChat.Api.Controllers
             var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
             if (!userExists) return NotFound("User not found");
 
-            // 1) Publikus szobák
             var publicRooms = await _context.ChatRooms
                 .Where(r => !r.IsPrivate)
                 .Select(r => new RoomForUserDto
@@ -61,7 +60,6 @@ namespace RealTimeChat.Api.Controllers
                 })
                 .ToListAsync();
 
-            // 2) Privát Csoportok
             var privateGroups = await _context.ChatRooms
                 .Include(r => r.Participants)
                 .Where(r => r.IsPrivate
@@ -77,7 +75,6 @@ namespace RealTimeChat.Api.Controllers
                 })
                 .ToListAsync();
 
-            // 3) DM-ek
             var dmRooms = await _context.ChatRooms
                 .Where(r => r.IsPrivate && (r.UserAId == userId || r.UserBId == userId))
                 .Include(r => r.UserA).Include(r => r.UserB)

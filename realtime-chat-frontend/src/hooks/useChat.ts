@@ -91,11 +91,9 @@ export function useChat(currentUser: CurrentUser | null) {
     onlineUsersRef.current = userIds;
     setOnlineUserIds(userIds);
     
-    // Frissítjük a meglévő user listát (ha már be van töltve)
     setAllUsers((prev) =>
       prev.map((u) => ({ ...u, isOnline: userIds.some((id) => id.toLowerCase() === u.id.toLowerCase()) }))
     );
-    // Frissítjük a szobákat
     setRooms((prevRooms) => updateRoomsWithPresence(prevRooms, userIds));
   };
 
@@ -127,6 +125,7 @@ export function useChat(currentUser: CurrentUser | null) {
 
   const handleRoomCreated = (roomDto: RoomCreatedDto) => {
     setRooms((prev) => {
+      // Dedublikálás: Ha már létezik, nem adjuk hozzá újra
       if (prev.some((r) => r.id === roomDto.id)) return prev;
 
       const newRoom: ChatRoom = {
@@ -141,6 +140,7 @@ export function useChat(currentUser: CurrentUser | null) {
         lastMessageSender: undefined
       };
 
+      // Online státusz beállítása (ha DM)
       if (newRoom.isPrivate && newRoom.otherUserId) {
          const isPartnerOnline = onlineUsersRef.current.some(
             id => id.toLowerCase() === newRoom.otherUserId!.toLowerCase()
@@ -148,6 +148,7 @@ export function useChat(currentUser: CurrentUser | null) {
          newRoom.isOnline = isPartnerOnline;
       }
 
+      // Új szoba az elejére
       return [newRoom, ...prev];
     });
   };
@@ -208,12 +209,10 @@ export function useChat(currentUser: CurrentUser | null) {
       onUserOffline(handleUserOffline);
       onRoomCreated(handleRoomCreated);
 
-      // ADATBETÖLTÉS
       const roomsRes = await api.get<RoomForUserDto[]>(`/api/rooms/for-user/${user.id}`);
       const usersRes = await getAllUsers();
 
-      // ✅ JAVÍTÁS: Itt fésüljük össze az online listát az API-ból jött userekkel!
-      // Így ha a SignalR már megjött, nem írjuk felül "offline"-ra a usereket.
+      // Lista összefésülése
       const usersWithPresence = usersRes.map(u => ({
           ...u,
           isOnline: onlineUsersRef.current.some(oid => oid.toLowerCase() === u.id.toLowerCase())
@@ -314,7 +313,6 @@ export function useChat(currentUser: CurrentUser | null) {
     }
   };
 
-  // ✅ JAVÍTÁS: Az unused 'value' warning eltüntetése
   const handleInputTyping = (_: string) => {
     if (!currentUser || !selectedRoomId) return;
     if (!isTypingRef.current) {
@@ -342,7 +340,6 @@ export function useChat(currentUser: CurrentUser | null) {
     if (allUsers.length === 0) {
         try {
           const users = await getAllUsers();
-          // Itt is összefésüljük a biztonság kedvéért, ha esetleg újranyitják
           const usersWithPresence = users.map(u => ({
               ...u,
               isOnline: onlineUsersRef.current.some(oid => oid.toLowerCase() === u.id.toLowerCase())
@@ -362,25 +359,14 @@ export function useChat(currentUser: CurrentUser | null) {
         params: { userId: currentUser.id, targetUserId: target.id },
       });
       const r = res.data;
-      const isTargetOnline = onlineUserIds.some(
-          id => id.toLowerCase() === (r.otherUserId ?? target.id).toLowerCase()
-      );
-      const dmRoom: ChatRoom = {
-        id: r.id,
-        name: r.name,
-        isPrivate: r.isPrivate,
-        otherUserId: r.otherUserId ?? target.id,
-        otherDisplayName: r.otherDisplayName ?? target.displayName,
-        isOnline: isTargetOnline,
-        participantIds: []
-      };
-      setRooms((prev) => {
-        const exists = prev.find((x) => x.id === dmRoom.id);
-        if (exists) return prev;
-        return [...prev, dmRoom];
-      });
+      
+      // ✅ JAVÍTÁS: Nem adjuk hozzá kézzel a szobát!
+      // A backend küldi a "RoomCreated" eventet, az fogja hozzáadni.
+      
       setIsUserListOpen(false);
-      await switchRoom(dmRoom.id);
+      // Azonnal megpróbálunk átváltani rá. 
+      // Ha a SignalR még nem ért ide, a lista frissülésekor meg fog jelenni.
+      await switchRoom(r.id);
     } catch (err) {
       console.error("DM error", err);
       setUserListError("Nem sikerült megnyitni a privát beszélgetést.");
@@ -397,18 +383,12 @@ export function useChat(currentUser: CurrentUser | null) {
             isPrivate: isPrivateGroup
         });
         const r = res.data;
-        const groupRoom: ChatRoom = {
-            id: r.id,
-            name: r.name,
-            isPrivate: r.isPrivate,
-            lastMessage: "A csoport létrejött",
-            lastMessageSender: "Rendszer",
-            isOnline: false,
-            participantIds: (r as any).ParticipantIds ?? r.participantIds ?? []
-        };
-        setRooms((prev) => [groupRoom, ...prev]);
+        
+        // ✅ JAVÍTÁS: Itt sem adjuk hozzá kézzel!
+        // A SignalR "RoomCreated" event intézi a listát.
+
         setIsUserListOpen(false);
-        await switchRoom(groupRoom.id);
+        await switchRoom(r.id);
     } catch (err) {
         console.error("Create group error", err);
         setUserListError("Nem sikerült létrehozni a csoportot.");
