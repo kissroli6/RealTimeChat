@@ -31,19 +31,28 @@ export function UserListModal({
   const isDm = mode === 'DM';
   const showNameInput = isGroup || isPublic;
 
-  // --- RENDEZÉS LOGIKA ---
-  // A bejelentkezett felhasználó mindig legyen az első helyen!
-  const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
-      if (a.id === currentUser.id) return -1; // Te mész előre
+  // --- SZŰRÉS ÉS RENDEZÉS LOGIKA ---
+  const visibleUsers = useMemo(() => {
+    // 1. Alap lista másolata
+    let filtered = [...users];
+
+    // 2. Ha DM mód van, KIVESSZÜK magunkat a listából
+    if (isDm) {
+        filtered = filtered.filter(u => u.id !== currentUser.id);
+    }
+
+    // 3. Rendezés (Csoportnál magunkat előre, amúgy névsor)
+    return filtered.sort((a, b) => {
+      if (a.id === currentUser.id) return -1;
       if (b.id === currentUser.id) return 1;
-      return a.displayName.localeCompare(b.displayName); // Többiek névsorban (opcionális)
+      return a.displayName.localeCompare(b.displayName);
     });
-  }, [users, currentUser.id]);
+  }, [users, currentUser.id, isDm]); // Függőségek: ha a mód változik, újra számol
 
   useEffect(() => {
     if (isOpen) {
       setGroupName("");
+      // Csak csoportnál jelöljük ki magunkat
       if (isGroup && currentUser) {
           setSelectedUserIds([currentUser.id]);
       } else {
@@ -58,11 +67,8 @@ export function UserListModal({
     if (isGroup && userId === currentUser.id) {
         return; 
     }
-
     setSelectedUserIds(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
     );
   };
 
@@ -84,31 +90,36 @@ export function UserListModal({
   };
 
   const isButtonDisabled = () => {
-    if (isPublic) {
-      return !groupName.trim();
-    }
+    if (isPublic) return !groupName.trim();
     return !groupName.trim() || selectedUserIds.length < 2;
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-      <div style={{ width: "100%", maxWidth: "420px", backgroundColor: "#161616", borderRadius: "24px", border: "1px solid #333", boxShadow: "0 20px 50px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", maxHeight: "85vh", overflow: "hidden" }}>
+    <div className="modal-overlay">
+      <div className="modal-card">
         
-        {/* FEJLÉC */}
-        <div style={{ padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #222" }}>
-          <h3 style={{ margin: 0, fontSize: "20px", fontWeight: 800, color: "#f5f5f5" }}>{getTitle()}</h3>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", color: "#888", cursor: "pointer", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", padding: 0, transition: "color 0.2s", outline: "none" }} onMouseEnter={(e) => e.currentTarget.style.color = "#fff"} onMouseLeave={(e) => e.currentTarget.style.color = "#888"}>✕</button>
+        {/* HEADER */}
+        <div className="modal-header">
+          <h3 className="modal-title">{getTitle()}</h3>
+          <button onClick={onClose} className="modal-close">✕</button>
         </div>
 
         {/* INPUT */}
         {showNameInput && (
           <div style={{ padding: "24px 24px 0 24px" }}>
-            <label style={{ display: "block", fontSize: "12px", color: "#888", marginBottom: "8px", fontWeight: 700, textTransform: "uppercase" }}>SZOBA NEVE</label>
-            <input type="text" placeholder={isPublic ? "pl. Általános csevegő" : "pl. Fejlesztői Csapat"} value={groupName} onChange={(e) => setGroupName(e.target.value)} autoFocus style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", borderRadius: "12px", border: "1px solid #333", backgroundColor: "#222", color: "#fff", fontSize: "15px", outline: "none" }} />
+            <label className="modal-section-label" style={{padding: 0, marginBottom: "8px"}}>SZOBA NEVE</label>
+            <input 
+                type="text" 
+                className="form-input"
+                placeholder={isPublic ? "pl. Általános csevegő" : "pl. Fejlesztői Csapat"} 
+                value={groupName} 
+                onChange={(e) => setGroupName(e.target.value)} 
+                autoFocus 
+            />
           </div>
         )}
 
-        {error && <div style={{ padding: "0 24px", marginTop: "16px" }}><p style={{ backgroundColor: "rgba(255, 107, 107, 0.1)", color: "#ff6b6b", fontSize: "13px", padding: "10px", borderRadius: "8px", margin: 0, textAlign: "center" }}>{error}</p></div>}
+        {error && <div className="error-banner" style={{ margin: "16px 24px 0 24px" }}>{error}</div>}
 
         {/* LISTA */}
         {isPublic ? (
@@ -121,16 +132,15 @@ export function UserListModal({
         ) : (
           <>
             <div style={{ padding: "16px 24px 8px 24px" }}>
-              <span style={{ fontSize: "12px", color: "#888", fontWeight: 700, textTransform: "uppercase" }}>
+              <span className="modal-section-label">
                 {isGroup ? "TAGOK KIVÁLASZTÁSA" : "ELÉRHETŐ FELHASZNÁLÓK"}
               </span>
             </div>
 
-            <div style={{ padding: "0 16px 16px 16px", overflowY: "auto", flex: 1, minHeight: "200px" }}>
-              {/* ITT HASZNÁLJUK A RENDEZETT LISTÁT (sortedUsers) */}
-              {sortedUsers.map((u) => {
+            <div className="modal-body custom-scroll">
+              {/* ITT MOST MÁR A SZŰRT LISTÁT (visibleUsers) HASZNÁLJUK */}
+              {visibleUsers.map((u) => {
                 const initial = u.displayName.charAt(0).toUpperCase();
-                
                 const isMe = isGroup && u.id === currentUser.id;
                 const isSelected = selectedUserIds.includes(u.id);
 
@@ -142,27 +152,13 @@ export function UserListModal({
                       else handleToggleUser(u.id);
                     }}
                     disabled={isMe}
-                    style={{ 
-                      width: "100%", 
-                      textAlign: "left", 
-                      padding: "10px 12px", 
-                      borderRadius: "16px", 
-                      border: isSelected ? "1px solid #7C58DC" : "1px solid transparent", 
-                      // ✅ EGYSÉGES HÁTTÉR: Akár mi vagyunk, akár más, ugyanolyan lila a háttér
-                      backgroundColor: isSelected ? "rgba(124, 88, 220, 0.1)" : "transparent",
-                      // Csak a kurzor jelzi, hogy mi nem vagyunk kattinthatóak
-                      cursor: isMe ? "default" : "pointer",
-                      marginBottom: "4px", 
-                      display: "flex", alignItems: "center", gap: "14px", transition: "all 0.2s",
-                      outline: "none"
-                    }}
-                    onMouseEnter={(e) => { if(!isSelected && !isMe) e.currentTarget.style.backgroundColor = "#2a2a2a" }}
-                    onMouseLeave={(e) => { if(!isSelected && !isMe) e.currentTarget.style.backgroundColor = "transparent" }}
+                    className={`user-select-item ${isSelected ? 'is-selected' : ''}`}
                   >
                     <div style={{ position: "relative" }}>
-                      <div style={{ width: "40px", height: "40px", borderRadius: "50%", backgroundColor: "#333", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "16px" }}>{initial}</div>
-                      {u.isOnline && <div style={{ position: "absolute", bottom: "0", right: "0", width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#9FD633", border: "2px solid #161616" }} />}
+                      <div className="avatar" style={{width: "40px", height: "40px", fontSize: "16px"}}>{initial}</div>
+                      {u.isOnline && <div className="online-indicator" />}
                     </div>
+                    
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: "14px", fontWeight: 700, color: "#f5f5f5" }}>
@@ -170,35 +166,9 @@ export function UserListModal({
                         </span>
                         
                         {isGroup && (
-                          <div style={{ 
-                            width: "20px", 
-                            height: "20px", 
-                            borderRadius: "6px",
-                            // ✅ EGYSÉGES KERET és HÁTTÉR MEGOLDÁS:
-                            // Mindig van 2px keret. 
-                            // Ha ki van választva: keret színe = #7C58DC, háttér = #7C58DC.
-                            // Ha NINCS kiválasztva: keret = #444, háttér = transparent.
-                            // Ez megszünteti a méretugrálást.
-                            border: isSelected ? "2px solid #7C58DC" : "2px solid #444",
-                            backgroundColor: isSelected ? "#7C58DC" : "transparent",
-                            display: "flex", 
-                            alignItems: "center", 
-                            justifyContent: "center",
-                            flexShrink: 0
-                          }}>
-                            {/* ✅ PIPA KÖZÉPRE IGAZÍTÁSA */}
+                          <div className="checkbox">
                             {isSelected && (
-                                <svg 
-                                  width="12" 
-                                  height="12" 
-                                  viewBox="0 0 24 24" 
-                                  fill="none" 
-                                  stroke="#fff" // Mindenkinek fehér a pipája
-                                  strokeWidth="4" 
-                                  strokeLinecap="round" 
-                                  strokeLinejoin="round"
-                                  style={{ display: "block" }} // Ez a kulcs a függőleges középre igazításhoz!
-                                >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
                                   <polyline points="20 6 9 17 4 12"></polyline>
                                 </svg>
                             )}
@@ -216,8 +186,12 @@ export function UserListModal({
         )}
 
         {showNameInput && (
-          <div style={{ padding: "16px 24px", borderTop: "1px solid #222" }}>
-            <button onClick={handleCreateGroup} disabled={isButtonDisabled()} style={{ width: "100%", padding: "12px", borderRadius: "999px", border: "none", backgroundColor: isButtonDisabled() ? "#333" : "#9FD633", color: isButtonDisabled() ? "#777" : "#111", cursor: isButtonDisabled() ? "not-allowed" : "pointer", fontWeight: 700, fontSize: "14px", transition: "all 0.2s", outline: "none" }}>
+          <div className="modal-footer">
+            <button 
+                onClick={handleCreateGroup} 
+                disabled={isButtonDisabled()} 
+                className={`create-group-btn ${!isButtonDisabled() ? 'active' : ''}`}
+            >
               {isPublic ? "Szoba létrehozása" : "Csoport létrehozása"}
             </button>
           </div>

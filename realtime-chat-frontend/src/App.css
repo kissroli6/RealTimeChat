@@ -1,42 +1,196 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+:root {
+  --bg-dark: #0f1c0f;
+  --bg-card: #161616;
+  --bg-hover: #2a2a2a;
+  --bg-input: #222;
+  --border-color: #333;
+  --primary-green: #A1DD29;
+  --primary-purple: #7C58DC;
+  --text-main: #f5f5f5;
+  --text-muted: #888;
+  --danger: #ff6b6b;
+  --font-family: 'Inter', system-ui, sans-serif;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* --- GLOBAL RESET --- */
+* {
+  box-sizing: border-box;
+  outline: none !important;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family);
+  /* A háttér itt van, így mindenhol látszik */
+  background: linear-gradient(135deg, #1a1a2e 0%, #000000 50%, var(--bg-dark) 100%);
+  color: var(--text-main);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* =========================================
+   LOGIN SCREEN
+   ========================================= */
+.login-container {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* ... (A Login többi része maradhat változatlan) ... */
+.login-card { background-color: #111; padding: 40px 32px; border-radius: 24px; width: 100%; max-width: 400px; border: 1px solid #222; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; align-items: center; }
+.app-logo { width: 80px; height: 80px; background: linear-gradient(135deg, var(--primary-green) 0%, var(--primary-purple) 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(161, 221, 41, 0.2); margin-bottom: 24px; }
+.login-title { font-size: 24px; font-weight: 800; margin: 0 0 8px 0; color: #f5f5f5; }
+.login-subtitle { color: #777; margin-bottom: 32px; text-align: center; font-size: 14px; line-height: 1.5; }
+.login-form { width: 100%; display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
+.form-group { width: 100%; }
+.form-label { display: block; font-size: 11px; color: #888; margin-bottom: 8px; font-weight: 700; padding-left: 4px; text-transform: uppercase; }
+.form-input { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid #333; background-color: #222; color: #fff; font-size: 15px; }
+.login-button { width: 100%; padding: 14px; border-radius: 999px; border: none; background-color: var(--primary-green); color: #111; font-weight: 800; font-size: 15px; cursor: pointer; transition: transform 0.1s; }
+.login-button:disabled { opacity: 0.7; cursor: not-allowed; }
+.login-button:active { transform: scale(0.98); }
+.error-banner { width: 100%; background-color: rgba(255, 107, 107, 0.1); color: var(--danger); font-size: 13px; padding: 10px; border-radius: 8px; margin-bottom: 16px; text-align: center; }
+.mode-toggle { margin-top: 24px; padding-top: 20px; border-top: 1px solid #222; width: 100%; text-align: center; color: #666; font-size: 14px; }
+.toggle-link { background: none; border: none; padding: 0; color: #f5f5f5; font-weight: bold; cursor: pointer; text-decoration: underline; font-size: 14px; }
+
+
+/* =========================================
+   APP LAYOUT (JAVÍTVA)
+   ========================================= */
+
+/* 1. KÜLSŐ KONTÉNER: Ez felel a teljes képernyős igazításért */
+.app-container {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;     /* Függőleges közép */
+  justify-content: center; /* Vízszintes közép */
 }
 
-.card {
-  padding: 2em;
+/* 2. BELSŐ DOBOZ: Ez maga a chat app mérete (1200px, 90vh) */
+.app-layout {
+  width: 100%;
+  max-width: 1200px;
+  height: 90vh;
+  display: flex;
+  gap: 16px;
+  padding: 0 20px;
+  /* A margin: 0 auto; itt már nem kell, mert a flex elintézi */
 }
 
-.read-the-docs {
-  color: #888;
-}
+.sidebar-wrapper { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; }
+.chat-wrapper { flex: 1; display: flex; flex-direction: column; }
+
+
+/* =========================================
+   SIDEBAR (Változatlan)
+   ========================================= */
+.sidebar { height: 100%; background-color: var(--bg-card); border-radius: 24px; display: flex; flex-direction: column; border: 1px solid var(--border-color); overflow: hidden; }
+.sidebar-header { padding: 20px 20px 16px 20px; display: flex; align-items: center; justify-content: space-between; }
+.app-name { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #f5f5f5; }
+.icon-button { background: var(--bg-hover); border: 1px solid var(--border-color); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; padding: 0; color: #fff; }
+.icon-button:hover { border-color: #777; }
+.sidebar-tabs { padding: 0 20px 16px 20px; }
+.tabs-container { display: flex; background-color: var(--bg-hover); border-radius: 12px; padding: 4px; }
+.tab-button { flex: 1; padding: 8px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; background-color: transparent; color: #888; transition: all 0.2s; }
+.tab-button.active { background-color: #444; color: #fff; }
+.room-list { flex: 1; overflow-y: auto; padding: 0 12px; }
+.room-item { width: 100%; display: flex; align-items: center; gap: 12px; margin-bottom: 4px; padding: 12px; border-radius: 12px; border: none; cursor: pointer; text-align: left; transition: background 0.2s; background-color: transparent; }
+.room-item:hover { background-color: rgba(255,255,255,0.03); }
+.room-item.selected { background-color: var(--bg-hover); }
+.avatar { width: 42px; height: 42px; border-radius: 50%; background-color: #333; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #fff; font-size: 16px; flex-shrink: 0; position: relative; }
+.room-item.selected .avatar { background-color: var(--primary-purple); }
+.online-indicator { position: absolute; bottom: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background-color: #9FD633; border: 2px solid #161616; }
+.room-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.room-name { font-size: 14px; font-weight: 600; color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.room-item.selected .room-name { color: #fff; }
+.room-last-msg { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid #222; background-color: #1a1a1a; display: flex; align-items: center; justify-content: space-between; }
+.user-mini { display: flex; align-items: center; gap: 10px; }
+.my-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #9FD633; color: #000; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+.my-info { display: flex; flex-direction: column; }
+.my-name { font-size: 14px; font-weight: 600; color: #fff; }
+.my-handle { font-size: 11px; color: #777; }
+.logout-btn { background: transparent; border: none; cursor: pointer; color: var(--primary-purple); font-size: 13px; font-weight: 600; padding: 4px 8px; }
+
+/* =========================================
+   CHAT AREA (Változatlan)
+   ========================================= */
+.chat-container { height: 100%; background-color: var(--bg-card); border-radius: 24px; border: 1px solid var(--border-color); display: flex; flex-direction: row; overflow: hidden; }
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.chat-header { padding: 20px 24px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; background-color: #1a1a1a; }
+.header-info { display: flex; align-items: center; gap: 12px; }
+.header-avatar { width: 42px; height: 42px; border-radius: 50%; background-color: var(--primary-purple); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #fff; font-size: 18px; }
+.header-title { margin: 0; font-size: 18px; color: #f5f5f5; }
+.status-online { font-size: 12px; color: #9FD633; }
+.toggle-panel-btn { background: #2a2a2a; border: 1px solid #333; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; padding: 0; }
+.toggle-panel-btn.active { background: #444; }
+.toggle-panel-btn:hover { border-color: #777; }
+.messages-list { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.message-item { display: flex; flex-direction: column; max-width: 70%; }
+.message-item.own { align-items: flex-end; align-self: flex-end; }
+.message-item.other { align-items: flex-start; align-self: flex-start; }
+.sender-name { font-size: 11px; color: #777; margin-left: 12px; margin-bottom: 4px; }
+.message-bubble { padding: 12px 16px; font-size: 15px; line-height: 1.4; word-break: break-word; color: #f5f5f5; }
+.message-item.own .message-bubble { border-radius: 18px 18px 0 18px; background-color: var(--primary-purple); }
+.message-item.other .message-bubble { border-radius: 18px 18px 18px 0; background-color: #2a2a2a; }
+.input-area { padding: 0 20px 20px 20px; }
+.typing-indicator { min-height: 20px; margin-bottom: 8px; font-size: 12px; color: #9FD633; padding-left: 16px; font-style: italic; transition: opacity 0.2s; }
+.input-wrapper { display: flex; gap: 10px; background-color: #2a2a2a; padding: 8px; border-radius: 999px; border: 1px solid #333; }
+.chat-input { flex: 1; padding: 10px 16px; border-radius: 999px; border: none; background-color: transparent; color: #f5f5f5; font-size: 14px; }
+.send-btn { padding: 10px 24px; border-radius: 999px; border: none; background-color: #9FD633; color: #111; cursor: pointer; font-weight: 700; font-size: 14px; }
+
+/* =========================================
+   ADMIN PANEL & MODALS (Változatlan)
+   ========================================= */
+.admin-panel { width: 280px; border-left: 1px solid #222; background-color: #111; display: flex; flex-direction: column; padding: 20px; height: 100%; animation: slideIn 0.3s ease-out; box-sizing: border-box; }
+.admin-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2a2a2a; padding-bottom: 16px; margin-bottom: 20px; }
+.admin-title { margin: 0; font-size: 16px; color: #f5f5f5; font-weight: 700; }
+.close-btn { background: transparent; border: none; color: #666; cursor: pointer; padding: 4px; display: flex; align-items: center; }
+.admin-label { font-size: 11px; color: #777; font-weight: bold; display: block; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.admin-card { background-color: #161616; padding: 16px; border-radius: 16px; border: 1px solid #2a2a2a; display: flex; flex-direction: column; gap: 12px; }
+.dropdown-trigger { width: 100%; padding: 12px 16px; border-radius: 10px; background-color: #0a0a0a; border: 1px solid #333; color: #777; cursor: pointer; font-size: 13px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
+.dropdown-trigger.active { border-color: var(--primary-purple); color: #fff; }
+.dropdown-menu { position: absolute; top: calc(100% + 8px); left: 0; right: 0; background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100; max-height: 240px; overflow-y: auto; padding: 6px; }
+.dropdown-item { padding: 8px 12px; border-radius: 8px; cursor: pointer; color: #aaa; font-size: 13px; display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.dropdown-item:hover { background-color: #2a2a2a; color: #fff; }
+.mini-avatar { width: 24px; height: 24px; border-radius: 50%; background-color: #333; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #fff; }
+.add-btn { width: 100%; padding: 12px; border-radius: 10px; border: none; font-weight: 800; font-size: 13px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; background-color: #2a2a2a; color: #555; cursor: not-allowed; }
+.add-btn.active { background-color: #9FD633; color: #111; cursor: pointer; }
+.member-list { display: flex; flex-direction: column; gap: 8px; }
+.member-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background-color: #161616; border-radius: 12px; border: 1px solid #2a2a2a; }
+.member-name { font-size: 14px; color: #eee; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-you { font-size: 10px; color: #666; margin-top: 2px; }
+.kick-btn { background-color: rgba(255, 107, 107, 0.1); border: none; border-radius: 6px; color: #ff6b6b; cursor: pointer; font-weight: 700; font-size: 10px; padding: 6px 10px; text-transform: uppercase; transition: all 0.2s; }
+.kick-btn:hover { background-color: rgba(255, 107, 107, 0.2); }
+
+.modal-overlay { position: fixed; inset: 0; background-color: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-card { width: 100%; max-width: 420px; background-color: #161616; border-radius: 24px; border: 1px solid #333; box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: flex; flex-direction: column; max-height: 85vh; overflow: hidden; }
+.modal-header { padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222; }
+.modal-title { margin: 0; font-size: 20px; font-weight: 800; color: #f5f5f5; }
+.modal-close { border: none; background: transparent; color: #888; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 20px; padding: 0; }
+.modal-close:hover { color: #fff; }
+.modal-body { padding: 0 16px 16px 16px; overflow-y: auto; flex: 1; min-height: 200px; }
+.modal-section-label { padding: 16px 8px 8px 8px; font-size: 12px; color: #888; font-weight: 700; text-transform: uppercase; display: block;}
+.user-select-item { width: 100%; text-align: left; padding: 10px 12px; border-radius: 16px; background-color: transparent; border: 1px solid transparent; cursor: pointer; margin-bottom: 4px; display: flex; align-items: center; gap: 14px; transition: all 0.2s; }
+.user-select-item:hover:not(:disabled) { background-color: #2a2a2a; }
+.user-select-item.is-selected { background-color: rgba(124, 88, 220, 0.1); border-color: var(--primary-purple); }
+.user-select-item:disabled { cursor: default; opacity: 0.7; }
+.user-select-item.is-selected:disabled { background-color: rgba(124, 88, 220, 0.1); border-color: var(--primary-purple); }
+.checkbox { width: 20px; height: 20px; border-radius: 6px; border: 2px solid #444; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.user-select-item.is-selected .checkbox { background-color: var(--primary-purple); border-color: var(--primary-purple); }
+.user-select-item.is-selected:disabled .checkbox { background-color: #444; border-color: #444; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid #222; }
+.create-group-btn { width: 100%; padding: 12px; border-radius: 999px; border: none; font-weight: 700; font-size: 14px; transition: all 0.2s; }
+.create-group-btn.active { background-color: #9FD633; color: #111; cursor: pointer; }
+.create-group-btn:disabled { background-color: #333; color: #777; cursor: not-allowed; }

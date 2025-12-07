@@ -9,6 +9,9 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { UserListModal } from "./components/UserListModal";
 
+// FONTOS: Itt importáljuk az új CSS-t, ami a layoutot és a stílusokat kezeli
+import "./App.css"; 
+
 const LOCAL_STORAGE_USER_KEY = "rtc_current_user";
 
 function App() {
@@ -16,7 +19,7 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
 
-  // A hook inicializálása
+  // A hook inicializálása (mindig meghívódik, de csak akkor aktív, ha van currentUser)
   const chat = useChat(currentUser);
 
   // --- Auth Logic (Bejelentkezés ellenőrzése induláskor) ---
@@ -31,7 +34,7 @@ function App() {
     }
   }, []);
 
-  // BEJELENTKEZÉS
+  // BEJELENTKEZÉS (Létező felhasználó)
   const handleLogin = async (userName: string) => {
     setLoginError(null);
     setIsLoginLoading(true);
@@ -48,7 +51,7 @@ function App() {
     }
   };
 
-  // ✅ ÚJ: REGISZTRÁCIÓ
+  // REGISZTRÁCIÓ (Új felhasználó)
   const handleRegister = async (userName: string, displayName: string) => {
     setLoginError(null);
     setIsLoginLoading(true);
@@ -79,82 +82,61 @@ function App() {
 
   // --- Render ---
 
-  // Ha nincs bejelentkezve, akkor a LoginScreen-t mutatjuk
+  // 1. Ha nincs bejelentkezve, akkor a LoginScreen-t mutatjuk (középre igazítva a CSS által)
   if (!currentUser) {
     return (
         <LoginScreen 
             onLogin={handleLogin} 
-            onRegister={handleRegister} // <--- EZ HIÁNYZOTT AZ ELŐBB!
+            onRegister={handleRegister} 
             isLoading={isLoginLoading} 
             error={loginError} 
         />
     );
   }
 
-  // Ha be van jelentkezve, akkor a fő alkalmazást
+  // 2. Ha be van jelentkezve, akkor a fő alkalmazást
   return (
-    <div style={{ 
-      height: "100vh", 
-      width: "100vw",
-      background: "linear-gradient(135deg, #1a1a2e 0%, #000000 50%, #0f1c0f 100%)",
-      color: "#f5f5f5", 
-      display: "flex", 
-      alignItems: "center", 
-      justifyContent: "center", 
-      fontFamily: "'Inter', system-ui, sans-serif",
-      overflow: "hidden"
-    }}>
-      
-      <div style={{ 
-        width: "100%", 
-        maxWidth: "1200px", 
-        height: "90vh", 
-        display: "flex", 
-        gap: "16px", 
-        padding: "0 20px"
-      }}>
-        
-        {/* Sidebar Wrapper */}
-        <div style={{ width: "320px", flexShrink: 0, display: "flex", flexDirection: "column" }}>
-           <Sidebar 
-            rooms={chat.rooms} 
-            selectedRoomId={chat.selectedRoomId} 
-            onSelectRoom={chat.switchRoom} 
-            onOpenUserList={chat.openUserList}
-            currentUser={currentUser}
-            onLogout={handleLogout}
-          />
-        </div>
-        
-        {/* Chat Area Wrapper */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <ChatArea 
-            activeRoom={chat.rooms.find(r => r.id === chat.selectedRoomId)}
-            messages={chat.messages}
-            typingUsers={chat.typingUsers}
-            onSendMessage={chat.sendMessage}
-            onTyping={chat.handleInputTyping}
+    <div className="app-container"> {/* KÜLSŐ KERET: Ez igazítja középre az egészet */}
+        <div className="app-layout"> {/* BELSŐ DOBOZ: Ez a fix szélességű chat felület */}
+           
+           <div className="sidebar-wrapper">
+              <Sidebar 
+                rooms={chat.rooms} 
+                selectedRoomId={chat.selectedRoomId} 
+                onSelectRoom={chat.switchRoom} 
+                onOpenUserList={chat.openUserList}
+                currentUser={currentUser}
+                onLogout={handleLogout}
+              />
+           </div>
             
-            // Props bekötése az admin funkciókhoz
-            currentUserId={currentUser.id} 
-            allUsers={chat.allUsers}       
-            onAddMember={chat.addMemberToGroup}      
-            onRemoveMember={chat.removeMemberFromGroup} 
-          />
-        </div>
+           <div className="chat-wrapper">
+              <ChatArea 
+                activeRoom={chat.rooms.find(r => r.id === chat.selectedRoomId)}
+                messages={chat.messages}
+                typingUsers={chat.typingUsers}
+                onSendMessage={chat.sendMessage}
+                onTyping={chat.handleInputTyping}
+                // Props bekötése az admin funkciókhoz
+                currentUserId={currentUser.id} 
+                allUsers={chat.allUsers}       
+                onAddMember={chat.addMemberToGroup}      
+                onRemoveMember={chat.removeMemberFromGroup} 
+              />
+           </div>
 
-        {/* UserListModal - Modal ablak új beszélgetésekhez */}
-        <UserListModal 
-          isOpen={chat.isUserListOpen}
-          onClose={() => chat.setIsUserListOpen(false)}
-          users={chat.allUsers}
-          mode={chat.userListMode}
-          onSelectUser={chat.startDm}
-          onCreateGroup={chat.createGroup}
-          error={chat.userListError}
-          currentUser={currentUser} 
-        />
-      </div>
+           {/* Modális ablak (mindig renderelődik, de csak akkor látszik, ha isOpen=true) */}
+           <UserListModal 
+              isOpen={chat.isUserListOpen}
+              onClose={() => chat.setIsUserListOpen(false)}
+              users={chat.allUsers}
+              mode={chat.userListMode}
+              onSelectUser={chat.startDm}
+              onCreateGroup={chat.createGroup}
+              error={chat.userListError}
+              currentUser={currentUser} 
+           />
+        </div>
     </div>
   );
 }
