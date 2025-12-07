@@ -61,8 +61,3 @@ Modern, real-time chat alkalmazás ASP.NET Core backenden és React + TypeScript
    npm run build
    npm run preview
    ```
-
-## Tippek fejlesztéshez
-- A SignalR kapcsolat HTTPS-t használ; ha saját tanúsítványt használsz, importáld a böngészőbe, különben a kapcsolat elutasításra kerülhet.
-- Ha a frontend más porton fut, add hozzá az origin-t a `Program.cs` CORS szabályaihoz.
-- Privát csoportoknál a tagságot a REST API kezeli (`add-member` / `remove-member`), a valós idejű eseményekhez pedig a hub `JoinRoom`/`LeaveRoom` metódusait hívd meg.
