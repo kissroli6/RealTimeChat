@@ -229,15 +229,24 @@ export function useChat(currentUser: CurrentUser | null) {
   };
 
   useEffect(() => {
-    if (currentUser) {
-      initForUser(currentUser);
-    } else {
-       stopConnection();
-    }
-    return () => {
-      if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+    let isUnmounted = false;
+
+    const bootstrap = async () => {
+      await stopConnection();
+      if (currentUser && !isUnmounted) {
+        await initForUser(currentUser);
+      }
     };
-  }, [currentUser]); 
+
+    bootstrap();
+
+    return () => {
+      isUnmounted = true;
+      if (typingTimeoutRef.current) window.clearTimeout(typingTimeoutRef.current);
+      void stopConnection();
+    };
+  }, [currentUser]);
+
 
   const switchRoom = async (roomId: string) => {
     if (!currentUser || roomId === selectedRoomId) return;
