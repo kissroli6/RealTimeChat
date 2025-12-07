@@ -98,6 +98,12 @@ function App() {
             typingUsers={chat.typingUsers}
             onSendMessage={chat.sendMessage}
             onTyping={chat.handleInputTyping}
+            
+            // ✅ ÚJ PROPOK BEKÖTÉSE:
+            currentUserId={currentUser.id} // Átadjuk a saját ID-nkat
+            allUsers={chat.allUsers}       // Átadjuk az összes felhasználót (a listázáshoz)
+            onAddMember={chat.addMemberToGroup}      // Hozzáadás funkció
+            onRemoveMember={chat.removeMemberFromGroup} // Törlés funkció
           />
         </div>
 

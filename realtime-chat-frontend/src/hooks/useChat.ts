@@ -23,41 +23,43 @@ import { getAllUsers } from "../api/users";
 
 import type { 
   RoomForUserDto, 
-  ChatRoom, 
   UiMessage, 
   CurrentUser, 
   UserWithPresence,
   UserListMode 
 } from "../types";
 
-// ÚJ: Segédtípus a gépelő felhasználó adatainak
+// Frissített ChatRoom típus (bekerült a participantIds)
+export type ChatRoom = {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+  otherUserId?: string;
+  otherDisplayName?: string;
+  lastMessage?: string;
+  lastMessageSender?: string;
+  isOnline?: boolean;
+  participantIds?: string[]; // ÚJ MEZŐ
+};
+
 export type TypingUser = {
   userId: string;
   displayName: string;
 };
 
 export function useChat(currentUser: CurrentUser | null) {
-  // --- State ---
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
-  
-  // MÓDOSÍTÁS: Most már objektumokat tárolunk (ID + Név)
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
-  
-  // Presence state
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [allUsers, setAllUsers] = useState<UserWithPresence[]>([]);
   
-  // UI state
   const [isInitializing, setIsInitializing] = useState(false);
   const [isUserListOpen, setIsUserListOpen] = useState(false);
-  
-  // State a modal módjának tárolására
   const [userListMode, setUserListMode] = useState<UserListMode>('DM');
   const [userListError, setUserListError] = useState<string | null>(null);
 
-  // Refs
   const typingTimeoutRef = useRef<number | null>(null);
   const isTypingRef = useRef(false);
   const selectedRoomRef = useRef<string | null>(selectedRoomId);
@@ -67,7 +69,6 @@ export function useChat(currentUser: CurrentUser | null) {
     selectedRoomRef.current = selectedRoomId;
   }, [selectedRoomId]);
 
-  // --- Segédfüggvények ---
   const updateRoomsWithPresence = (currentRooms: ChatRoom[], onlineIds: string[]) => {
     return currentRooms.map((room) => {
       if (room.isPrivate && room.otherUserId) {
@@ -82,7 +83,6 @@ export function useChat(currentUser: CurrentUser | null) {
     });
   };
 
-  // --- SignalR Event Handlers ---
   const handleInitialOnlineUsers = (userIds: string[]) => {
     onlineUsersRef.current = userIds;
     setOnlineUserIds(userIds);
@@ -116,7 +116,6 @@ export function useChat(currentUser: CurrentUser | null) {
     setRooms((prevRooms) => updateRoomsWithPresence(prevRooms, newIds));
   };
 
-  // --- Init Logic ---
   const initForUser = async (user: CurrentUser) => {
     setIsInitializing(true);
     setMessages([]);
@@ -150,27 +149,17 @@ export function useChat(currentUser: CurrentUser | null) {
         });
       });
 
-      // MÓDOSÍTÁS: Itt kezeljük a nevek mentését
       onUserTyping((ev: TypingEvent) => {
         const currentRoomId = selectedRoomRef.current;
         if (!currentRoomId || ev.roomId.toLowerCase() !== currentRoomId.toLowerCase()) return;
-        
-        // Saját magunkat nem írjuk ki
         if (ev.userId.toLowerCase() === user.id.toLowerCase()) return;
 
         setTypingUsers((prev) => {
             if (ev.isTyping) {
-                // Ha már benne van, nem adjuk hozzá újra
                 const exists = prev.some(u => u.userId === ev.userId);
                 if (exists) return prev;
-                
-                // Hozzáadjuk a nevet is
-                return [...prev, { 
-                    userId: ev.userId, 
-                    displayName: ev.displayName || "Valaki" 
-                }];
+                return [...prev, { userId: ev.userId, displayName: ev.displayName || "Valaki" }];
             } else {
-                // Eltávolítjuk
                 return prev.filter((u) => u.userId !== ev.userId);
             }
         });
@@ -181,6 +170,11 @@ export function useChat(currentUser: CurrentUser | null) {
       onUserOffline(handleUserOffline);
 
       const roomsRes = await api.get<RoomForUserDto[]>(`/api/rooms/for-user/${user.id}`);
+      
+      // Betöltjük az összes felhasználót is, hogy a neveket tudjuk párosítani az ID-khoz
+      const usersRes = await getAllUsers();
+      setAllUsers(usersRes);
+
       let mappedRooms: ChatRoom[] = roomsRes.data.map((r) => ({
         id: r.id,
         name: r.name,
@@ -189,7 +183,8 @@ export function useChat(currentUser: CurrentUser | null) {
         otherDisplayName: r.otherDisplayName ?? undefined,
         lastMessage: undefined,
         lastMessageSender: undefined,
-        isOnline: false
+        isOnline: false,
+        participantIds: r.ParticipantIds ?? [] // Adatbázisból jövő résztvevők
       }));
 
       const roomsWithMessages = await Promise.all(
@@ -236,7 +231,6 @@ export function useChat(currentUser: CurrentUser | null) {
     );
   };
 
-  // --- Effects ---
   useEffect(() => {
     if (currentUser) {
       initForUser(currentUser);
@@ -249,14 +243,12 @@ export function useChat(currentUser: CurrentUser | null) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]); 
 
-  // --- Actions ---
-
   const switchRoom = async (roomId: string) => {
     if (!currentUser || roomId === selectedRoomId) return;
     if (selectedRoomId) {
        try { await leaveRoom(selectedRoomId); } catch (e) { console.warn(e); }
     }
-    setTypingUsers([]); // Fontos: szobaváltáskor töröljük a gépelőket
+    setTypingUsers([]); 
     await handleRoomJoin(roomId, currentUser);
   };
 
@@ -293,19 +285,16 @@ export function useChat(currentUser: CurrentUser | null) {
     if (!currentUser) return;
     setUserListError(null);
     setUserListMode(mode); 
-    try {
-      const users = await getAllUsers();
-      const filtered = users.filter((u) => u.id !== currentUser.id);
-      const mapped: UserWithPresence[] = filtered.map((u) => ({
-         ...u, 
-         isOnline: onlineUserIds.some(id => id.toLowerCase() === u.id.toLowerCase()) 
-      }));
-      setAllUsers(mapped);
-      setIsUserListOpen(true);
-    } catch (err) {
-      setUserListError("Nem sikerült betölteni a felhasználókat.");
-      setIsUserListOpen(true);
+    // Ha már be vannak töltve a userek az init-nél, nem kell újra
+    if (allUsers.length === 0) {
+        try {
+          const users = await getAllUsers();
+          setAllUsers(users);
+        } catch (err) {
+          setUserListError("Nem sikerült betölteni a felhasználókat.");
+        }
     }
+    setIsUserListOpen(true);
   };
 
   const startDm = async (target: UserWithPresence) => {
@@ -325,8 +314,7 @@ export function useChat(currentUser: CurrentUser | null) {
         otherUserId: r.otherUserId ?? target.id,
         otherDisplayName: r.otherDisplayName ?? target.displayName,
         isOnline: isTargetOnline,
-        lastMessage: undefined, 
-        lastMessageSender: undefined
+        participantIds: []
       };
       setRooms((prev) => {
         const exists = prev.find((x) => x.id === dmRoom.id);
@@ -343,34 +331,63 @@ export function useChat(currentUser: CurrentUser | null) {
 
   const createGroup = async (name: string, userIds: string[]) => {
     if (!currentUser) return;
-    
     const isPrivateGroup = userListMode === 'GROUP'; 
-
     try {
         const res = await api.post<RoomForUserDto>("/api/rooms/group", {
             name: name,
             userIds: [currentUser.id, ...userIds],
             isPrivate: isPrivateGroup
         });
-
         const r = res.data;
-        
         const groupRoom: ChatRoom = {
             id: r.id,
             name: r.name,
             isPrivate: r.isPrivate,
             lastMessage: "A csoport létrejött",
             lastMessageSender: "Rendszer",
-            isOnline: false 
+            isOnline: false,
+            participantIds: r.ParticipantIds
         };
-
         setRooms((prev) => [groupRoom, ...prev]);
         setIsUserListOpen(false);
         await switchRoom(groupRoom.id);
-
     } catch (err) {
         console.error("Create group error", err);
         setUserListError("Nem sikerült létrehozni a csoportot.");
+    }
+  };
+
+  // --- ÚJ ADMIN FUNKCIÓK ---
+
+  const addMemberToGroup = async (roomId: string, userId: string) => {
+    if (!currentUser) return;
+    try {
+        await api.post("/api/rooms/add-member", { roomId, userId });
+        // Frissítjük a helyi állapotot
+        setRooms(prev => prev.map(r => {
+            if (r.id === roomId) {
+                return { ...r, participantIds: [...(r.participantIds || []), userId] };
+            }
+            return r;
+        }));
+    } catch (err) {
+        console.error("Add member failed", err);
+    }
+  };
+
+  const removeMemberFromGroup = async (roomId: string, userId: string) => {
+    if (!currentUser) return;
+    try {
+        await api.post("/api/rooms/remove-member", { roomId, userId });
+        // Frissítjük a helyi állapotot
+        setRooms(prev => prev.map(r => {
+            if (r.id === roomId) {
+                return { ...r, participantIds: (r.participantIds || []).filter(id => id !== userId) };
+            }
+            return r;
+        }));
+    } catch (err) {
+        console.error("Remove member failed", err);
     }
   };
 
@@ -378,7 +395,7 @@ export function useChat(currentUser: CurrentUser | null) {
     rooms,
     selectedRoomId,
     messages,
-    typingUsers, // Ez most már {userId, displayName} tömb
+    typingUsers,
     isInitializing,
     switchRoom,
     sendMessage,
@@ -390,6 +407,8 @@ export function useChat(currentUser: CurrentUser | null) {
     openUserList,
     userListMode,
     startDm,
-    createGroup
+    createGroup,
+    addMemberToGroup, // exportáljuk
+    removeMemberFromGroup // exportáljuk
   };
 }

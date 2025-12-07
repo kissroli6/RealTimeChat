@@ -12,8 +12,8 @@ using RealTimeChat.Api.Data;
 namespace RealTimeChat.Api.Migrations
 {
     [DbContext(typeof(ChatDbContext))]
-    [Migration("20251206191858_AddRoomParticipants")]
-    partial class AddRoomParticipants
+    [Migration("20251207003242_AddParticipantsTable")]
+    partial class AddParticipantsTable
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

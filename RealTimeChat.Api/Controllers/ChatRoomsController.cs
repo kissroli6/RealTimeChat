@@ -23,6 +23,8 @@ namespace RealTimeChat.Api.Controllers
             public bool IsPrivate { get; set; }
             public Guid? OtherUserId { get; set; }
             public string? OtherDisplayName { get; set; }
+            // ÚJ: A résztvevők listája (hogy tudjuk, kivel vagyunk egy csoportban)
+            public List<Guid> ParticipantIds { get; set; } = new();
         }
 
         public class CreateGroupRequest
@@ -32,40 +34,48 @@ namespace RealTimeChat.Api.Controllers
             public bool IsPrivate { get; set; }
         }
 
+        public class RoomMemberRequest
+        {
+            public Guid RoomId { get; set; }
+            public Guid UserId { get; set; }
+        }
+
         [HttpGet("for-user/{userId:guid}")]
         public async Task<ActionResult<IEnumerable<RoomForUserDto>>> GetRoomsForUser(Guid userId)
         {
             var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
             if (!userExists) return NotFound("User not found");
 
-            // 1) Publikus szobák (Mindenki látja)
+            // 1) Publikus szobák
             var publicRooms = await _context.ChatRooms
                 .Where(r => !r.IsPrivate)
                 .Select(r => new RoomForUserDto
                 {
                     Id = r.Id,
                     Name = r.Name,
-                    IsPrivate = false
+                    IsPrivate = false,
+                    ParticipantIds = new List<Guid>() // Publikusnál nem listázzuk itt
                 })
                 .ToListAsync();
 
-            // 2) Privát Csoportok (Csak tagok látják)
-            // Itt használjuk az új Participants kapcsolatot!
+            // 2) Privát Csoportok
             var privateGroups = await _context.ChatRooms
                 .Include(r => r.Participants)
                 .Where(r => r.IsPrivate
                             && r.UserAId == null
                             && r.UserBId == null
-                            && r.Participants.Any(p => p.UserId == userId)) // <--- A LÉNYEG
+                            && r.Participants.Any(p => p.UserId == userId))
                 .Select(r => new RoomForUserDto
                 {
                     Id = r.Id,
                     Name = r.Name,
-                    IsPrivate = true
+                    IsPrivate = true,
+                    // Itt töltjük be a résztvevőket
+                    ParticipantIds = r.Participants.Select(p => p.UserId).ToList()
                 })
                 .ToListAsync();
 
-            // 3) DM-ek (UserA / UserB alapján)
+            // 3) DM-ek
             var dmRooms = await _context.ChatRooms
                 .Where(r => r.IsPrivate && (r.UserAId == userId || r.UserBId == userId))
                 .Include(r => r.UserA).Include(r => r.UserB)
@@ -80,7 +90,8 @@ namespace RealTimeChat.Api.Controllers
                     Name = r.Name,
                     IsPrivate = true,
                     OtherUserId = other?.Id,
-                    OtherDisplayName = other?.DisplayName
+                    OtherDisplayName = other?.DisplayName,
+                    ParticipantIds = new List<Guid>()
                 };
             });
 
@@ -99,10 +110,12 @@ namespace RealTimeChat.Api.Controllers
                 IsPrivate = request.IsPrivate
             };
 
-            // Ha privát csoport, mentsük el a résztvevőket!
             if (request.IsPrivate && request.UserIds.Any())
             {
-                foreach (var uid in request.UserIds)
+                // JAVÍTÁS: .Distinct() használata, hogy ne lehessen duplikált User a listában
+                var uniqueUserIds = request.UserIds.Distinct().ToList();
+
+                foreach (var uid in uniqueUserIds)
                 {
                     newRoom.Participants.Add(new RoomParticipant
                     {
@@ -119,8 +132,41 @@ namespace RealTimeChat.Api.Controllers
             {
                 Id = newRoom.Id,
                 Name = newRoom.Name,
-                IsPrivate = newRoom.IsPrivate
+                IsPrivate = newRoom.IsPrivate,
+                ParticipantIds = request.UserIds // Itt mindegy, mit adunk vissza
             });
+        }
+
+        // --- ÚJ ENDPOINT: TAG HOZZÁADÁSA ---
+        [HttpPost("add-member")]
+        public async Task<IActionResult> AddMember([FromBody] RoomMemberRequest request)
+        {
+            var room = await _context.ChatRooms.Include(r => r.Participants).FirstOrDefaultAsync(r => r.Id == request.RoomId);
+            if (room == null) return NotFound("Szoba nem található");
+            if (!room.IsPrivate) return BadRequest("Publikus szobához nem lehet így hozzáadni.");
+
+            var exists = room.Participants.Any(p => p.UserId == request.UserId);
+            if (exists) return BadRequest("A felhasználó már tagja a csoportnak.");
+
+            room.Participants.Add(new RoomParticipant { RoomId = request.RoomId, UserId = request.UserId });
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        // --- ÚJ ENDPOINT: TAG ELTÁVOLÍTÁSA ---
+        [HttpPost("remove-member")]
+        public async Task<IActionResult> RemoveMember([FromBody] RoomMemberRequest request)
+        {
+            var participant = await _context.RoomParticipants
+                .FirstOrDefaultAsync(p => p.RoomId == request.RoomId && p.UserId == request.UserId);
+
+            if (participant == null) return NotFound("A felhasználó nem tagja a szobának.");
+
+            _context.RoomParticipants.Remove(participant);
+            await _context.SaveChangesAsync();
+
+            return Ok();
         }
     }
 }

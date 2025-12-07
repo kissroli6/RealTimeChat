@@ -5,7 +5,12 @@ using RealTimeChat.Api.Hubs;
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------- SERVICES ----------
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Ez megakadályozza az összeomlást, ha az adatok körkörösen hivatkoznak egymásra
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 
 builder.Services.AddDbContext<ChatDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

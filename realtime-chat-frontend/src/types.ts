@@ -6,6 +6,7 @@ export type RoomForUserDto = {
   isPrivate: boolean;
   otherUserId?: string | null;
   otherDisplayName?: string | null;
+  participantIds?: string[];
 };
 
 export type ChatRoom = {
@@ -17,6 +18,7 @@ export type ChatRoom = {
   lastMessage?: string;
   lastMessageSender?: string;
   isOnline?: boolean;
+  participantIds?: string[];
 };
 
 export type UiMessage = {
